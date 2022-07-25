@@ -61,6 +61,7 @@ end subroutine init_data
 
 subroutine set_send_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, is_avr, intvl, num_of_layer, &
                          grid_intpl_tag, fill_value, exchange_tag)
+  use jlt_utils, only : put_log
   implicit none
   character(len=*), intent(IN) :: send_comp, send_grid, send_data_name
   character(len=*), intent(IN) :: recv_comp, recv_grid, recv_data_name
@@ -70,6 +71,15 @@ subroutine set_send_data(send_comp, send_grid, send_data_name, recv_comp, recv_g
   integer, intent(IN)          :: grid_intpl_tag
   real(kind=8), intent(IN)     :: fill_value
   integer, intent(IN)          :: exchange_tag
+  character(len=STR_LONG)      :: log_str
+
+  call put_log("jlt_set_send_data", 2)
+  call put_log("  send_comp = "//trim(send_comp), 2)
+  call put_log("  send_grid = "//trim(send_grid), 2)
+  call put_log("  send_data = "//trim(send_data_name), 2)
+  call put_log("  recv_comp = "//trim(recv_comp), 2)
+  call put_log("  recv_grid = "//trim(recv_grid), 2)
+  call put_log("  recv_data = "//trim(recv_data_name), 2)
   
   num_of_send_data = num_of_send_data + 1
 
@@ -84,6 +94,7 @@ end subroutine set_send_data
 
 subroutine set_recv_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, is_avr, intvl, num_of_layer, &
                          grid_intpl_tag, fill_value, exchange_tag)
+  use jlt_utils, only : put_log
   implicit none
   character(len=*), intent(IN) :: send_comp, send_grid, send_data_name
   character(len=*), intent(IN) :: recv_comp, recv_grid, recv_data_name
@@ -94,6 +105,14 @@ subroutine set_recv_data(send_comp, send_grid, send_data_name, recv_comp, recv_g
   real(kind=8), intent(IN)     :: fill_value
   integer, intent(IN)          :: exchange_tag
   
+  call put_log("jlt_set_recv_data", 2)
+  call put_log("  send_comp = "//trim(send_comp), 2)
+  call put_log("  send_grid = "//trim(send_grid), 2)
+  call put_log("  send_data = "//trim(send_data_name), 2)
+  call put_log("  recv_comp = "//trim(recv_comp), 2)
+  call put_log("  recv_grid = "//trim(recv_grid), 2)
+  call put_log("  recv_data = "//trim(recv_data_name), 2)
+
   num_of_recv_data = num_of_recv_data + 1
 
   recv_data(num_of_recv_data) = data_class(send_data_name, recv_data_name, is_avr, intvl, num_of_layer, &

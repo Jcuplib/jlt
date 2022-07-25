@@ -28,8 +28,12 @@ module jlt_interface
   public :: jlt_def_varp                    ! subroutine ! dummy subroutine
   public :: jlt_def_varg                    ! subroutine ! dummy subroutine
   public :: jlt_end_var_def                 ! subroutnne () ! dummy subroutine
-  public :: jlt_set_send_data               ! subroutine (   )
-  public :: jlt_set_recv_data               ! subroutine (   )
+  public :: jlt_set_send_data               ! subroutine (send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, 
+                                            !             is_avr, intvl, num_of_layer, &
+                                            !             grid_intpl_tag, fill_value, exchange_tag)
+  public :: jlt_set_recv_data               ! subroutine (send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, 
+                                            !             is_avr, intvl, num_of_layer, &
+                                            !             grid_intpl_tag, fill_value, exchange_tag)
   public :: jlt_set_fill_value              ! subroutine (fill_value)  ! dummy 
   public :: jlt_get_fill_value              ! real(kind=8) function () ! dummy
   public :: jlt_set_mapping_table           ! subroutine (my_name, send_com, send_grid, recv_comp, recv_grid, map_tag, send_index, recv_index, coef)
@@ -52,15 +56,15 @@ module jlt_interface
   
 !--------------------------------   private  ---------------------------------!
 
-  character(len=STR_SHORT) :: my_comp_name
-  integer :: my_comp_id
-  integer :: num_of_comp
-  integer :: max_num_of_exchange_data
+  character(len=STR_SHORT) :: my_comp_name = ""
+  integer :: my_comp_id                    = -1
+  integer :: num_of_comp                   = -1
+  integer :: max_num_of_exchange_data      = -1
   
-  integer :: my_comm
-  integer :: my_group
-  integer :: my_size
-  integer :: my_rank
+  integer :: my_comm                       = -1
+  integer :: my_group                      = -1
+  integer :: my_size                       = -1
+  integer :: my_rank                       = -1
 
   logical :: is_my_intpl = .false.
 
@@ -118,13 +122,14 @@ subroutine jlt_set_new_comp(component_name)
   implicit none
   character(len=*), intent(IN) :: component_name
 
+  my_comp_name = trim(component_name)
   call set_my_component(component_name)
 
 end subroutine jlt_set_new_comp
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine jlt_initialize(model_name, conf_file, default_time_unit, log_level, log_stderr)
+subroutine jlt_initialize(model_name, default_time_unit, log_level, log_stderr)
   use jlt_comp, only : init_model_process, get_num_of_total_component, &
                        is_my_component, get_component_name, get_comp_id_from_name
   use jlt_utils, only : set_log_level, init_log, put_log, IntToStr
@@ -135,7 +140,6 @@ subroutine jlt_initialize(model_name, conf_file, default_time_unit, log_level, l
   use jlt_exchange, only : init_exchange
   use jlt_data, only : init_data
   implicit none
-  character(len=*), intent(IN) :: conf_file
   character(len=*), intent(IN) :: model_name ! main component name of my task 
   character(len=3), optional, intent(IN) :: default_time_unit ! 2014/07/03 [ADD]
   integer, optional, intent(IN) :: log_level ! 0, 1, 2
@@ -148,6 +152,10 @@ subroutine jlt_initialize(model_name, conf_file, default_time_unit, log_level, l
   integer :: my_comp, max_comp
   integer :: i
 
+  if (my_comp_name == "") then ! jlt_set_new_comp not called
+     call jlt_set_new_comp(model_name)
+  end if
+  
   call init_model_process() ! 2014/08/27 [MOD]
 
   ! set time unit
@@ -208,7 +216,6 @@ subroutine jlt_initialize(model_name, conf_file, default_time_unit, log_level, l
 
   call init_log(trim(model_name))
 
-  my_comp_name = trim(model_name)
   my_comp_id   = get_comp_id_from_name(trim(model_name))
 
   call init_grid(my_comp_id, my_rank, my_size)
@@ -315,6 +322,7 @@ subroutine jlt_def_grid(grid_index, model_name, grid_name, num_of_vgrid)
   use jlt_comp, only : get_num_of_my_component, is_my_component
   use jlt_grid, only : def_grid
   use jlt_utils, only : error, put_log, IntToStr
+  use jlt_remapping, only : make_grid_index_file
   implicit none
   integer, intent(IN) :: grid_index(:)
   character(len=*), intent(IN) :: model_name ! model (component) name
@@ -342,6 +350,8 @@ subroutine jlt_def_grid(grid_index, model_name, grid_name, num_of_vgrid)
                                 //trim(IntToStr(size(grid_index))) &
                //", min : "//trim(IntToStr(minval(grid_index)))//", max : "//trim(IntToStr(maxval(grid_index))))
 
+  call make_grid_index_file(model_name, grid_name, my_rank, grid_index)
+  
 end subroutine jlt_def_grid
 
 !=======+=========+=========+=========+=========+=========+=========+=========+

@@ -11,7 +11,8 @@ JLTOBJS	= 	\
                 jlt_exchange.o\
                 jlt_data_class.o\
                 jlt_data.o\
-		jlt_interface.o
+                jlt_remapping.o\
+                jlt_interface.o
 
 
 

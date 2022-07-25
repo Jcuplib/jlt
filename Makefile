@@ -4,6 +4,11 @@ include files.mk
 
 JLTMODS = $(JLTOBJS:.o=.mod)
 
+test:
+	$(MAKE) $(JLTLIB)
+	$(MAKE) modules
+	$(FC) prg_remapping_table.f90 -I$(MODDIR) $(JLTLIB)
+
 all:
 	$(MAKE) $(JLTLIB)
 	$(MAKE) modules
