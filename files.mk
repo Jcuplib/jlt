@@ -6,12 +6,11 @@ JLTOBJS	= 	\
 		jlt_comp.o\
                 jlt_grid_class.o\
                 jlt_grid.o\
-                jlt_map_class.o\
+                jlt_remapping.o\
                 jlt_exchange_class.o\
                 jlt_exchange.o\
                 jlt_data_class.o\
                 jlt_data.o\
-                jlt_remapping.o\
                 jlt_interface.o
 
 

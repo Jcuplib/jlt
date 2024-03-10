@@ -353,7 +353,7 @@ subroutine put_data_2d(data_name, data, next_sec, delta_t)
   if (data_ptr%get_num_of_layer() <= 1) then
      call error("[jlt_data:put_data_2d]", "data dimension mismatch")
   end if
-  
+
   call data_ptr%put_data_2d(data, next_sec, delta_t)
   
 end subroutine put_data_2d

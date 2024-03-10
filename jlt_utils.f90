@@ -536,8 +536,10 @@ subroutine sort_int_1d(num_of_data, data, data2)
   integer :: digit
   integer :: i
 
-  if (num_of_data <= 0) return ! 20200514 add
+  if (num_of_data <= 1) return ! 20200514 add
 
+  if (maxval(data) <= 0) return
+  
   digit = int(log10(float(maxval(data)))) + 1
 
   if (present(data2)) then

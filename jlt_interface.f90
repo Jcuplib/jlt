@@ -21,7 +21,6 @@ module jlt_interface
   public :: jlt_set_new_comp                ! subroutine (comp_name)
   public :: jlt_initialize                  ! subroutine (comp_name, time_unit, log_level, log_strerr)
   public :: jlt_coupling_end                ! subroutine (time_array, is_call_mpi_finalize)
-  public :: jlt_set_interpolation_flag      ! subroutine (interpolation_flag)
   public :: jlt_get_mpi_parameter           ! subroutine (comp_name, comm, group, size, rank)
   public :: jlt_def_grid                    ! subroutine (grid_index, comp_name, grid_name, num_of_vlayer)  
   public :: jlt_end_grid_def                ! subroutine () ! dummy
@@ -65,8 +64,6 @@ module jlt_interface
   integer :: my_group                      = -1
   integer :: my_size                       = -1
   integer :: my_rank                       = -1
-
-  logical :: is_my_intpl = .false.
 
   interface jlt_put_data
      module procedure jlt_put_data_1d, jlt_put_data_25d
@@ -139,6 +136,7 @@ subroutine jlt_initialize(model_name, default_time_unit, log_level, log_stderr)
   use jlt_grid, only : init_grid
   use jlt_exchange, only : init_exchange
   use jlt_data, only : init_data
+  use jlt_remapping, only : init_remapping
   implicit none
   character(len=*), intent(IN) :: model_name ! main component name of my task 
   character(len=3), optional, intent(IN) :: default_time_unit ! 2014/07/03 [ADD]
@@ -235,6 +233,8 @@ subroutine jlt_initialize(model_name, default_time_unit, log_level, log_stderr)
 
   call init_data(trim(model_name))
   
+  call init_remapping(my_comm)
+  
 end subroutine jlt_initialize
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
@@ -260,16 +260,6 @@ subroutine jlt_coupling_end(time_array, isCallFinalize)
   call finalize_log()
 
 end subroutine jlt_coupling_end
-
-!=======+=========+=========+=========+=========+=========+=========+=========+
-
-subroutine jlt_set_interpolation_flag(interpolation_flag)
-  implicit none
-  logical, intent(IN) :: interpolation_flag
-
-  is_my_intpl = interpolation_flag
-
-end subroutine jlt_set_interpolation_flag
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
@@ -322,7 +312,7 @@ subroutine jlt_def_grid(grid_index, model_name, grid_name, num_of_vgrid)
   use jlt_comp, only : get_num_of_my_component, is_my_component
   use jlt_grid, only : def_grid
   use jlt_utils, only : error, put_log, IntToStr
-  use jlt_remapping, only : make_grid_index_file
+  use jlt_remapping, only : make_grid_rank_file
   implicit none
   integer, intent(IN) :: grid_index(:)
   character(len=*), intent(IN) :: model_name ! model (component) name
@@ -350,15 +340,20 @@ subroutine jlt_def_grid(grid_index, model_name, grid_name, num_of_vgrid)
                                 //trim(IntToStr(size(grid_index))) &
                //", min : "//trim(IntToStr(minval(grid_index)))//", max : "//trim(IntToStr(maxval(grid_index))))
 
-  call make_grid_index_file(model_name, grid_name, my_rank, grid_index)
+  call make_grid_rank_file(model_name, grid_name, grid_index)
   
 end subroutine jlt_def_grid
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
 subroutine jlt_end_grid_def()
+  use mpi
   implicit none
+  integer :: ierror
 
+  call mpi_barrier(MPI_COMM_WORLD, ierror)
+  write(0, *) "MPI_barrier OK"
+  
 end subroutine jlt_end_grid_def
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
@@ -450,7 +445,7 @@ subroutine jlt_set_mapping_table(my_model_name, &
   integer, intent(IN)           :: map_tag
   integer, intent(IN)           :: send_grid(:), recv_grid(:)
   real(kind=8), intent(IN)      :: coef(:)
-  
+  logical :: is_my_intpl  
   integer :: my_model_id, send_model_id, recv_model_id
 
   call put_log("------------------------------------------------------------------------------------------")
@@ -463,6 +458,12 @@ subroutine jlt_set_mapping_table(my_model_name, &
   send_model_id = get_comp_id_from_name(trim(send_model_name))
   recv_model_id = get_comp_id_from_name(trim(recv_model_name))
 
+  if (my_model_id == recv_model_id) then
+     is_my_intpl = .true.
+  else
+     is_my_intpl = .false.
+  end if
+  
   call set_mapping_table(trim(my_model_name), trim(send_model_name), trim(send_grid_name), &
                                               trim(recv_model_name), trim(recv_grid_name), &
                                               map_tag, is_my_intpl, send_grid, recv_grid, coef)

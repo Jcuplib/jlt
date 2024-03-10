@@ -255,13 +255,13 @@ module jlt_mpi_lib
   interface jml_ISendModel2
     module procedure jml_isend_double_1d_model2
     module procedure jml_isend_double_2d_model2
-    !module procedure jml_isend_int_1d_model
+    module procedure jml_isend_int_1d_model2
   end interface
 
   interface jml_IRecvModel2
     module procedure jml_irecv_double_1d_model2
     module procedure jml_irecv_double_2d_model2
-    !module procedure jml_irecv_int_1d_model
+    module procedure jml_irecv_int_1d_model2
   end interface
 
 #ifdef EXCHANGE_BY_MPI_RMA
@@ -3245,6 +3245,51 @@ end subroutine jml_isend_int_1d_model
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
+subroutine jml_isend_int_1d_model2(comp, data,is,ie,dest_model,dest_pe, exchange_tag)
+  implicit none
+  integer, intent(IN) :: comp
+  integer, pointer :: data
+  integer, intent(IN) :: is, ie
+  integer, intent(IN) :: dest_model, dest_pe
+  integer, optional, intent(IN) :: exchange_tag
+  integer :: dest_rank
+  integer :: tag
+  integer :: data_size
+  integer :: i
+
+  !!!!!!if (is == ie) return ! 2017/02/15  ! 2019/05/27 comment out
+
+  if (present(exchange_tag)) then
+    tag = exchange_tag
+  else 
+    tag = 0
+  end if
+
+  dest_rank = dest_pe + local(comp)%inter_comm(dest_model)%pe_offset
+  data_size = ie-is+1
+  
+  if (dest_rank == jml_GetMyrankModel(comp, dest_model)) then !local(comp)%my_rank) then
+    !write(0,*) "mpi_IBsend called ", comp, dest_model, dest_pe, exchange_tag
+    call check_buffer_size(data_size)
+    call MPI_BSEND(data,data_size,MPI_INTEGER,dest_rank,tag,local(comp)%inter_comm(dest_model)%mpi_comm,ierror)
+  else
+    isend_counter = isend_counter + 1
+
+    if (size(isend_request) < isend_counter) then
+      write(0, '(A,I7,A,I7)') "ERROR!!! jml_isend_int_1d_model, isend_counter = ", isend_counter, &
+                              " > size(isend_request) = ", size(isend_request)
+      call MPI_abort(MPI_COMM_WORLD, tag, ierror)
+      stop 9999
+    end if
+
+    call MPI_ISEND(data,data_size,MPI_INTEGER,dest_rank,tag, &
+                   local(comp)%inter_comm(dest_model)%mpi_comm, isend_request(isend_counter),ierror)
+  end if
+
+end subroutine jml_isend_int_1d_model2
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
 subroutine jml_irecv_double_1d_model(comp, data,is,ie,source_model,source_pe, exchange_tag)
   implicit none
   integer, intent(IN) :: comp
@@ -3446,6 +3491,46 @@ end subroutine jml_irecv_int_1d_model
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
+subroutine jml_irecv_int_1d_model2(comp, data,is,ie,source_model,source_pe, exchange_tag)
+  implicit none
+  integer, intent(IN) :: comp
+  integer, pointer :: data
+  integer, intent(IN) :: is, ie
+  integer, intent(IN) :: source_model, source_pe
+  integer, optional, intent(IN) :: exchange_tag
+  integer :: source_rank
+  integer :: tag
+  integer :: request
+  integer :: status(MPI_STATUS_SIZE)
+  
+  !!!!!!!if (is == ie) return ! 2017/02/15 ! 2019/05/27 comment out
+
+  if (present(exchange_tag)) then
+    tag = exchange_tag
+  else
+    tag = 0
+  end if
+
+  irecv_counter = irecv_counter + 1
+
+  source_rank = source_pe + local(comp)%inter_comm(source_model)%pe_offset
+
+  if (size(irecv_request) < irecv_counter) then
+      write(0, '(A,I7,A,I7)') "ERROR!!! jml_irecv_int_1d_model, irecv_counter = ", irecv_counter, &
+                  " > size(irecv_request) = ", size(irecv_request)
+      call MPI_abort(MPI_COMM_WORLD, tag, ierror)
+      stop 9999
+    end if
+
+  
+  call MPI_IRECV(data,ie-is+1,MPI_INTEGER,source_rank,tag, &
+                 local(comp)%inter_comm(source_model)%mpi_comm, irecv_request(irecv_counter),ierror)
+
+end subroutine jml_irecv_int_1d_model2
+
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
 subroutine jml_send_waitall()
   implicit none
   
@@ -3460,6 +3545,7 @@ end subroutine jml_send_waitall
 
 subroutine jml_recv_waitall()
   implicit none
+  integer :: i
   
   if (irecv_counter==0) return
   call mpi_WaitAll(irecv_counter, irecv_request, irecv_status, ierror)
