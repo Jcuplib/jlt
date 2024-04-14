@@ -19,6 +19,7 @@ type data_class
    type(exchange_class), pointer :: my_exchange
    logical                       :: avr_flag               ! average data or not
    integer                       :: intvl                  ! exchange interval (SEC)
+   integer                       :: time_lag               ! exchange time lag (-1, 1, 0)
    integer                       :: num_of_layer = 1       !
    integer                       :: grid_intpl_tag         ! grid interpolation tag used in the interpolation subroutine
    integer                       :: exchange_tag           ! MPI data exchange tag
@@ -60,12 +61,13 @@ contains
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
 function init_data_class(send_data_name, recv_data_name, avr_flag, &
-                         intvl, num_of_layer, intpl_tag, &
+                         intvl, time_lag, num_of_layer, intpl_tag, &
                          fill_value, exchange_tag) result(my_data_class)
   implicit none
   character(len=*), intent(IN) :: send_data_name, recv_data_name
   logical, intent(IN)          :: avr_flag
   integer, intent(IN)          :: intvl
+  integer, intent(IN)          :: time_lag
   integer, intent(IN)          :: num_of_layer
   integer, intent(IN)          :: intpl_tag
   real(kind=8), intent(IN)     :: fill_value
@@ -76,6 +78,7 @@ function init_data_class(send_data_name, recv_data_name, avr_flag, &
   my_data_class%recv_data_name = trim(recv_data_name)
   my_data_class%avr_flag       = avr_flag
   my_data_class%intvl          = intvl
+  my_data_class%time_lag       = time_lag
   my_data_class%num_of_layer   = num_of_layer
   my_data_class%grid_intpl_tag = intpl_tag
   my_data_class%fill_value     = fill_value
@@ -254,7 +257,7 @@ subroutine put_data_1d(self, data, next_sec, delta_t)
         write(log_str,'("  ",A,F8.5)') "[put_data_1d ] average the data, data_name = "//trim(self%my_name)//", weight = ",weight
         call put_log(trim(log_str))
 
-        if (mod(next_sec, self%intvl) == 0) then ! send step
+        if (mod(next_sec, int(self%intvl, kind=8)) == 0) then ! send step
            call self%my_exchange%send_data_1d(self%data1d, self%exchange_buffer, self%grid_intpl_tag, self%exchange_tag)
            self%data1d(:) = 0.d0 ! reset average data
            write(log_str,'("  ",A)') "[put_data_1d ] send    the data, data_name = "//trim(self%my_name)
@@ -262,7 +265,7 @@ subroutine put_data_1d(self, data, next_sec, delta_t)
         end if
 
      else ! snapshot data
-        if (mod(next_sec, self%intvl) == 0) then ! send step        
+        if (mod(next_sec, int(self%intvl, kind=8)) == 0) then ! send step        
            call self%my_exchange%local_2_exchange(data, self%data1d)
            call self%my_exchange%send_data_1d(self%data1d, self%exchange_buffer, self%grid_intpl_tag, self%exchange_tag)
            write(log_str,'("  ",A)') "[put_data_1d ] send    the data, data_name = "//trim(self%my_name)
@@ -327,7 +330,7 @@ subroutine put_data_2d(self, data, next_sec, delta_t)
         write(log_str,'("  ",A,F8.5)') "[put_data_2d ] average the data, data_name = "//trim(self%my_name)//", weight = ",weight
         call put_log(trim(log_str))
 
-        if (mod(next_sec, self%intvl) == 0) then ! send step
+        if (mod(next_sec, int(self%intvl, kind=8)) == 0) then ! send step
            !call self%my_exchange%send_data_2d(self%data2d, self%exchange_buffer, self%grid_intpl_tag, self%exchange_tag)
            !self%data2d(:,:) = 0.d0 ! reset average data
            !write(log_str,'("  ",A)') "[put_data_1d ] send    the data, data_name = "//trim(self%my_name)
@@ -335,7 +338,7 @@ subroutine put_data_2d(self, data, next_sec, delta_t)
         end if
 
      else ! snapshot data
-        if (mod(next_sec, self%intvl) == 0) then ! send step        
+        if (mod(next_sec, int(self%intvl, kind=8)) == 0) then ! send step        
            write(0, *) "put_data_2d, ", self%get_num_of_layer(), size(data,1), size(data,2), size(self%data2d,1), size(self%data2d,2)
            
            do k = 1, self%get_num_of_layer()
@@ -362,7 +365,7 @@ subroutine recv_data_1d(self, current_sec)
   integer(kind=8), intent(IN) :: current_sec
   character(len=STR_MID) :: log_str
 
-  if (mod(current_sec, self%intvl) == 0) then
+  if (mod(current_sec, int(self%intvl, kind=8)) == 0) then
     call self%my_exchange%recv_data_1d(self%exchange_buffer, self%exchange_tag)
     write(log_str,'("  ",A,I5)') "[recv_data_1d] recv    the data, data_name = "//trim(self%my_name) &
                                 //", exchange_tag = ", self%exchange_tag
@@ -381,7 +384,7 @@ subroutine recv_data_2d(self, current_sec)
   integer(kind=8), intent(IN) :: current_sec
   character(len=STR_MID) :: log_str
   
-  if (mod(current_sec, self%intvl) == 0) then
+  if (mod(current_sec, int(self%intvl, kind=8)) == 0) then
     call self%my_exchange%recv_data_2d(self%exchange_buffer, self%exchange_tag)
     write(log_str,'("  ",A,I5)') "[recv_data_2d] recv    the data, data_name = "//trim(self%my_name) &
                                 //", exchange_tag = ", self%exchange_tag
@@ -462,18 +465,18 @@ subroutine get_data_1d(self, data, current_sec, is_get_ok)
   logical, intent(INOUT)      :: is_get_ok
   character(len=STR_MID) :: log_str
 
-  if (mod(current_sec, self%intvl) == 0) then
+  if (mod(current_sec, int(self%intvl, kind=8)) == 0) then
 
      data(:) = self%fill_value  ! set fill value
 
-     write(log_str,'("  ",A,F)') "[get_data_1d ] get data, data_name = "//trim(self%my_name), data(1)
+     write(log_str,'("  ",A,F10.5)') "[get_data_1d ] get data, data_name = "//trim(self%my_name), data(1)
      call put_log(trim(log_str))
 
      call self%my_exchange%exchange_2_local(self%data1d, data)
 
      is_get_ok = .true.
 
-     write(log_str,'("  ",A,F)') "[get_data_1d ] get data, data_name = "//trim(self%my_name), data(1)
+     write(log_str,'("  ",A,F10.5)') "[get_data_1d ] get data, data_name = "//trim(self%my_name), data(1)
      call put_log(trim(log_str))
   else
      is_get_ok = .false.
@@ -494,7 +497,7 @@ subroutine get_data_2d(self, data, current_sec, is_get_ok)
    character(len=STR_MID) :: log_str
   integer :: k
   
-   if (mod(current_sec, self%intvl) == 0) then
+   if (mod(current_sec, int(self%intvl, kind=8)) == 0) then
 
      data(:,:) = self%fill_value  ! set fill value
 

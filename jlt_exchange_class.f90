@@ -133,6 +133,8 @@ subroutine set_mapping_table(self, send_comp_name, send_grid_name, recv_comp_nam
      dest_comp_id   = self%send_comp_id
   end if
 
+  call put_log("jlt_exchange_class : set_mapping_table, make_local_mapping_table  start")
+
   if (trim(self%my_name) == trim(send_comp_name)) then
      my_grid => get_grid_ptr(trim(send_grid_name))
      
@@ -149,6 +151,8 @@ subroutine set_mapping_table(self, send_comp_name, send_grid_name, recv_comp_nam
      call get_target_grid_rank(send_comp_name, send_grid_name, self%send_grid_index, self%target_rank)
   end if
   
+  call put_log("jlt_exchange_class : set_mapping_table, make_local_mapping_table  end")
+
   write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "global mapping table"
   write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "send_comp = "//trim(send_comp_name)//", recv_comp = "//trim(recv_comp_name)
 
@@ -168,7 +172,14 @@ subroutine set_mapping_table(self, send_comp_name, send_grid_name, recv_comp_nam
      write(300+source_comp_id*100 + my_grid%get_my_rank(), *) self%send_grid_index(i), self%recv_grid_index(i), self%coef(i), self%target_rank(i)
   end do
 
+  call put_log("jlt_exchange_class : set_mapping_table, reorder_index_by_target_rank start")
+
   call reorder_index_by_target_rank(self%send_grid_index, self%recv_grid_index, self%coef, self%target_rank)
+
+  call put_log("jlt_exchange_class : set_mapping_table, reorder_index_by_target_rank end")
+
+  call put_log("jlt_exchange_class : set_mapping_table, make_exchange_table start")
+
 
   if (trim(self%my_name) == trim(send_comp_name)) then
      call make_exchange_table(self%target_rank, self%send_grid_index, &
@@ -183,16 +194,32 @@ subroutine set_mapping_table(self, send_comp_name, send_grid_name, recv_comp_nam
 
   end if
 
+  call put_log("jlt_exchange_class : set_mapping_table, make_exchange_table end")
+
+  call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table start")
+
   if (trim(self%my_name) ==  trim(send_comp_name)) then
+    call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 1")
     call make_grid_conv_table(my_grid%get_grid_index_ptr(), self%ex_map%exchange_index, self%ex_map%conv_table)
+    call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 2")
     call send_my_grid_index(self, my_grid%get_grid_index_ptr())   
+    call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 3")
   else
+    call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 4")
     call make_recv_map_info(self%recv_grid_index, self%my_map)
+    call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 5")
     call make_grid_conv_table(my_grid%get_grid_index_ptr(), self%my_map%intpled_index, self%my_map%conv_table)
+    call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 6")
     call recv_send_grid_index(self)
+    call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 7")
     call make_conversion_table(self%recv_grid_index, self%my_map%intpled_index, self%recv_conv_table)
+    call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 8")
   end if
- 
+
+  call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table end")
+
+  return
+  
   write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "exchange rank"
   do i = 1, self%ex_map%num_of_exchange_rank
      write(300+source_comp_id*100 + my_grid%get_my_rank(), *) self%ex_map%exchange_rank(i), self%ex_map%num_of_exchange(i)
@@ -280,13 +307,15 @@ subroutine send_my_grid_index(self, grid_index)
      exchange_buffer(i) = grid_index(self%ex_map%conv_table(i))
   end do
 
+  write(0, *) "send_my_grid_index , ", trim(self%my_name), self%ex_map%num_of_exchange_rank
+
   do i = 1, self%ex_map%num_of_exchange_rank
      send_data_ptr => exchange_buffer(self%ex_map%offset(i)+1)
      data_tag = jml_GetMyrank(self%send_comp_id)*100000+self%ex_map%exchange_rank(i)
      call jml_IsendModel2(self%send_comp_id, send_data_ptr, 1, self%ex_map%num_of_exchange(i), &
                           self%recv_comp_id, self%ex_map%exchange_rank(i), data_tag)
   end do
-  
+
   call jml_send_waitall()
 
   deallocate(exchange_buffer)
@@ -310,6 +339,8 @@ subroutine recv_send_grid_index(self)
   !   exchange_buffer(i) = grid_index(self%conv_table(i))
   !end do
   exchange_buffer(:) = 0
+
+  write(0, *) "recv_send_grid_index , ", trim(self%my_name), self%ex_map%num_of_exchange_rank
   
   do i = 1, self%ex_map%num_of_exchange_rank
      recv_data_ptr => exchange_buffer(self%ex_map%offset(i)+1)
@@ -317,6 +348,7 @@ subroutine recv_send_grid_index(self)
      call jml_IrecvModel2(self%recv_comp_id, recv_data_ptr, 1, self%ex_map%num_of_exchange(i), &
                           self%send_comp_id, self%ex_map%exchange_rank(i), data_tag)
   end do
+
   call jml_recv_waitall()
 
   call make_conversion_table(self%send_grid_index, exchange_buffer, self%send_conv_table)

@@ -3,12 +3,13 @@ module jlt_interface
   use jlt_constant, only : NUM_OF_EXCHANGE_DATA, STR_SHORT
   use jlt_mpi_lib, only : jlt_set_world => jml_set_global_comm, &
                           jlt_get_world => jml_get_global_comm
-  use jlt_comp, only : jlt_get_num_of_component => get_num_of_total_component, &
-                       jlt_get_component_name   => get_component_name, &
-                       jlt_is_my_component      => is_my_component, &
-                       jlt_is_model_running     => is_model_running
-  use jlt_data, only : jlt_set_send_data        => set_send_data, &
-                       jlt_set_recv_data        => set_recv_data
+  use jlt_comp, only : jlt_get_num_of_component   => get_num_of_total_component, &
+                       jlt_get_component_name     => get_component_name, &
+                       jlt_get_comp_num_from_name => get_comp_id_from_name, &
+                       jlt_is_my_component        => is_my_component, &
+                       jlt_is_model_running       => is_model_running
+  use jlt_data, only : jlt_set_send_data          => set_send_data, &
+                       jlt_set_recv_data          => set_recv_data
   implicit none
   private
   
@@ -45,6 +46,7 @@ module jlt_interface
   public :: jlt_get_num_of_component        ! integer function ()
   public :: jlt_get_myrank_global           ! integer function ()
   public :: jlt_get_component_name          ! character(len=STR_LEN) function (comp_id)
+  public :: jlt_get_comp_num_from_name      ! integer function (comp_name)
   public :: jlt_is_my_component             ! logical function (comp_id) or (comp_name)
   public :: jlt_is_model_running            ! logical function (comp_name)
   public :: jlt_bcast_local                 ! subroutine (my_comp, data)
@@ -52,6 +54,10 @@ module jlt_interface
   public :: jlt_recv_array                  ! subroutine (my_comp, send_comp, recv_array)
   public :: jlt_log                         ! subroutine (sub_name, log_str, log_level)  
   public :: jlt_inc_calendar                ! subroutine (date, delta_t)
+  public :: jlt_inc_time                    ! subroutine (comp_name, time_array)
+  
+  public :: jlt_write_mapping_table         ! subroutine (fid) ! dummy
+  public :: jlt_read_mapping_table          ! subroutine (fid) ! dummy
   
 !--------------------------------   private  ---------------------------------!
 
@@ -562,6 +568,7 @@ subroutine jlt_set_time(comp_name, current_time, delta_t)
   call put_log("------------------------------------------------------------------------------------------")
   call put_log("------------------------------------------------------------------------------------------")
 
+
   current_sec = next_sec
  
   next_sec = current_sec + delta_t
@@ -575,6 +582,7 @@ subroutine jlt_set_time(comp_name, current_time, delta_t)
   do i = 1, get_num_of_recv_data()
      call recv_my_data(get_recv_data_name(i), current_sec)
   end do
+
 
   call jml_send_waitall()
   call jml_recv_waitall()
@@ -963,14 +971,14 @@ subroutine jlt_inc_calendar(itime, del_t)
   select case(get_time_unit())
   case(TU_SEC)
   case(TU_MIL)
-    if (size(itime) < 7) call error("jcup_inc_time", "array size of itime must be >= 7")
+    if (size(itime) < 7) call error("jlt_inc_time", "array size of itime must be >= 7")
     time%milli_sec = itime(7)
   case(TU_MCR)
-    if (size(itime) < 8) call error("jcup_inc_time", "array size of itime must be >= 8")
+    if (size(itime) < 8) call error("jlt_inc_time", "array size of itime must be >= 8")
     time%milli_sec = itime(7)
     time%micro_sec = itime(8)
   case default
-    call error("jcup_inc_time", "time unit parameter error")
+    call error("jlt_inc_time", "time unit parameter error")
   end select
 
   call inc_calendar(time, del_t)
@@ -985,19 +993,82 @@ subroutine jlt_inc_calendar(itime, del_t)
   select case(get_time_unit())
   case(TU_SEC)
   case(TU_MIL)
-    if (size(itime) < 7) call error("jcup_inc_time", "array size of itime must be >= 7")
+    if (size(itime) < 7) call error("jlt_inc_time", "array size of itime must be >= 7")
     itime(7) = time%milli_sec
   case(TU_MCR)
-    if (size(itime) < 8) call error("jcup_inc_time", "array size of itime must be >= 8")
+    if (size(itime) < 8) call error("jlt_inc_time", "array size of itime must be >= 8")
     itime(7) = time%milli_sec
     itime(8) = time%micro_sec
   case default
-    call error("jcup_inc_time", "time unit parameter error")
+    call error("jlt_inc_time", "time unit parameter error")
   end select
 
-  !write(0,*) "jcup_inc_time 2 "//trim(component_name)//", ",itime
+  !write(0,*) "jlt_inc_time 2 "//trim(component_name)//", ",itime
 
 end subroutine jlt_inc_calendar
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+subroutine jlt_inc_time(component_name, itime)
+  use jlt_time, only : get_current_time, time_type, get_delta_t, &
+                        inc_time, get_time_unit, TU_SEC, TU_MIL, TU_MCR
+  use jlt_comp, only : get_comp_id_from_name
+  use jlt_utils, only : error
+  implicit none
+  character(len=*), intent(IN) :: component_name
+  integer, intent(INOUT) :: itime(:)
+  type(time_type) :: time
+  integer(kind=8) :: time_sec
+  integer :: del_t
+  integer :: comp_id
+
+  comp_id = get_comp_id_from_name(component_name)
+
+  call get_current_time(comp_id, 1, time)
+  call get_delta_t(comp_id, 1, del_t)
+
+  !write(0,*) "jlt_inc_time 1 "//trim(component_name)//", ",itime
+
+  !call inc_time(time, del_t)
+
+  itime(1) = time%yyyy
+  itime(2) = time%mo
+  itime(3) = time%dd
+  itime(4) = time%hh
+  itime(5) = time%mm
+  itime(6) = time%ss
+
+  select case(get_time_unit())
+  case(TU_SEC)
+  case(TU_MIL)
+    if (size(itime) < 7) call error("jlt_inc_time", "array size of itime must be >= 7")
+    itime(7) = time%milli_sec
+  case(TU_MCR)
+    if (size(itime) < 8) call error("jlt_inc_time", "array size of itime must be >= 8")
+    itime(7) = time%milli_sec
+    itime(8) = time%micro_sec
+  case default
+    call error("jlt_inc_time", "time unit parameter error")
+  end select
+
+
+end subroutine jlt_inc_time
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+subroutine jlt_write_mapping_table(fid)
+  implicit none
+  integer, intent(IN) :: fid
+  
+end subroutine jlt_write_mapping_table
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+subroutine jlt_read_mapping_table(fid)
+  implicit none
+  integer, intent(IN) :: fid
+
+end subroutine jlt_read_mapping_table
+
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
 end module jlt_interface
