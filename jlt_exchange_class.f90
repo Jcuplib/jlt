@@ -647,7 +647,7 @@ subroutine recv_data_2d(self, exchange_buffer, num_of_layer, exchange_tag)
      real(kind=8), pointer    :: data_ptr
   end type data_ptr_type
   type (data_ptr_type), allocatable  :: ptr_array(:) 
-  integer :: i, k
+  integer :: i
   
   write(log_str,'("  ",A,I5)') "[recv_data_2d] recv data START, exchange_tag = ", exchange_tag
   call put_log(trim(log_str))
@@ -673,7 +673,7 @@ subroutine recv_data_2d(self, exchange_buffer, num_of_layer, exchange_tag)
        end if
 
        call jml_IrecvModel3(self%recv_comp_id, exchange_buffer(offset+1:offset+num_of_data, 1:num_of_layer), 1, num_of_data, 1, num_of_layer,  &
-                            self%send_comp_id, target_rank, exchange_tag+1000*k)
+                            self%send_comp_id, target_rank, exchange_tag)
        !call jml_IrecvModel2(self%recv_comp_id, ptr_array(k)%data_ptr, 1, num_of_data, 1,1,  &
        !                     self%send_comp_id, target_rank, exchange_tag)
 

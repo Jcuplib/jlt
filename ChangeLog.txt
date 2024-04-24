@@ -22,8 +22,8 @@ V0.010リリース
 Version:0.020000
 Date:2024/04/24
 
-Files:jlt_comp.f90, jlt_data.f90, jlt_data_class.f90, jlt_exchange_class.f90
-      jlt_interface.f90, jlt_mpi_lib.f90
+Files: jlt_comp.f90, jlt_data.f90, jlt_data_class.f90, jlt_exchange_class.f90
+       jlt_interface.f90, jlt_mpi_lib.f90
 
 Routines
  jlt_isend_double_1d_model3  : [add]
@@ -34,5 +34,19 @@ Routines
 
 Detail
  鉛直層を持つ2.5次元データの交換に対応。
+
+-----------------------------------------------------------------
+
+Version:0.020001
+Date:2024/04/24
+
+Files: jlt_exchange_class.f90
+      jlt_interface.f90, jlt_mpi_lib.f90
+
+Routines
+ recv_data_2d                : [mod]
+
+Detail
+ jml_IrecvModel3のexchange_tag設定バグフィックス
 
 
