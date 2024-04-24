@@ -11,12 +11,16 @@ module jlt_data
 !--------------------------------   public   ---------------------------------!
 
 public :: init_data                         ! subroutine (my_comp_name) 
-public :: set_send_data                     ! subroutine (send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, 
-                                            !             is_avr, intvl, num_of_layer, &
+
+public :: set_data                          ! subroutine (send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, 
+                                            !             is_avr, intvl, time_lag, num_of_layer, &
                                             !             grid_intpl_tag, fill_value, exchange_tag)
-public :: set_recv_data                     ! subroutine (send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, 
-                                            !             is_avr, intvl, num_of_layer, &
-                                            !             grid_intpl_tag, fill_value, exchange_tag)
+!public :: set_send_data                     ! subroutine (send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, 
+!                                            !             is_avr, intvl, num_of_layer, &
+!                                            !             grid_intpl_tag, fill_value, exchange_tag)
+!public :: set_recv_data                     ! subroutine (send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, 
+!                                            !             is_avr, intvl, num_of_layer, &
+!                                            !             grid_intpl_tag, fill_value, exchange_tag)
 !public :: set_my_data                       ! subroutine ()
 public :: get_num_of_send_data              ! integer function ()
 public :: get_num_of_recv_data              ! integer function ()
@@ -59,7 +63,50 @@ end subroutine init_data
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine set_send_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, is_avr, intvl, time_lag, num_of_layer, &
+
+subroutine set_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, is_avr, intvl, time_lag, num_of_layer, &
+                         grid_intpl_tag, fill_value, exchange_tag)
+  use jlt_utils, only : put_log
+  use jlt_constant, only : CONCURRENT_SEND_RECV, ADVANCE_SEND_RECV, BEHIND_SEND_RECV, IMMEDIATE_SEND_RECV
+  implicit none
+  character(len=*), intent(IN) :: send_comp, send_grid, send_data_name
+  character(len=*), intent(IN) :: recv_comp, recv_grid, recv_data_name
+  logical, intent(IN)          :: is_avr
+  integer, intent(IN)          :: intvl
+  integer, intent(IN)          :: time_lag
+  integer, intent(IN)          :: num_of_layer
+  integer, intent(IN)          :: grid_intpl_tag
+  real(kind=8), intent(IN)     :: fill_value
+  integer, intent(IN)          :: exchange_tag
+  character(len=STR_LONG)      :: log_str
+  integer                      :: exchange_type
+
+  exchange_type = CONCURRENT_SEND_RECV ! default type
+  
+  if (time_lag == 0) then
+     exchange_type = IMMEDIATE_SEND_RECV
+  end if
+  
+  if (trim(my_comp) == trim(send_comp)) then
+     if (time_lag == 1) then
+        exchange_type = ADVANCE_SEND_RECV
+     end if
+     call set_send_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, is_avr, intvl, &
+                        time_lag, exchange_type, num_of_layer, grid_intpl_tag, fill_value, exchange_tag)
+  else
+     if (time_lag == 1) then
+        exchange_type = BEHIND_SEND_RECV
+     end if
+     call set_recv_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, is_avr, intvl, &
+                        time_lag, exchange_type, num_of_layer, grid_intpl_tag, fill_value, exchange_tag)
+  end if
+  
+end subroutine set_data
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+subroutine set_send_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, is_avr, &
+                         intvl, exchange_type, time_lag, num_of_layer, &
                          grid_intpl_tag, fill_value, exchange_tag)
   use jlt_utils, only : put_log
   implicit none
@@ -68,6 +115,7 @@ subroutine set_send_data(send_comp, send_grid, send_data_name, recv_comp, recv_g
   logical, intent(IN)          :: is_avr
   integer, intent(IN)          :: intvl
   integer, intent(IN)          :: time_lag
+  integer, intent(IN)          :: exchange_type
   integer, intent(IN)          :: num_of_layer
   integer, intent(IN)          :: grid_intpl_tag
   real(kind=8), intent(IN)     :: fill_value
@@ -84,7 +132,8 @@ subroutine set_send_data(send_comp, send_grid, send_data_name, recv_comp, recv_g
   
   num_of_send_data = num_of_send_data + 1
 
-  send_data(num_of_send_data) = data_class(send_data_name, recv_data_name, is_avr, intvl, time_lag, num_of_layer, &
+  send_data(num_of_send_data) = data_class(send_data_name, recv_data_name, is_avr, &
+                                           intvl, exchange_type, time_lag, num_of_layer, &
                                            grid_intpl_tag, fill_value, exchange_tag)
   call send_data(num_of_send_data)%set_my_exchange(send_comp, send_grid, &
                                                    recv_comp, recv_grid)
@@ -93,7 +142,8 @@ end subroutine set_send_data
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine set_recv_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, is_avr, intvl, time_lag, num_of_layer, &
+subroutine set_recv_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, is_avr, &
+                         intvl, exchange_type, time_lag, num_of_layer, &
                          grid_intpl_tag, fill_value, exchange_tag)
   use jlt_utils, only : put_log
   implicit none
@@ -102,6 +152,7 @@ subroutine set_recv_data(send_comp, send_grid, send_data_name, recv_comp, recv_g
   logical, intent(IN)          :: is_avr
   integer, intent(IN)          :: intvl
   integer, intent(IN)          :: time_lag
+  integer, intent(IN)          :: exchange_type
   integer, intent(IN)          :: num_of_layer
   integer, intent(IN)          :: grid_intpl_tag
   real(kind=8), intent(IN)     :: fill_value
@@ -117,7 +168,8 @@ subroutine set_recv_data(send_comp, send_grid, send_data_name, recv_comp, recv_g
 
   num_of_recv_data = num_of_recv_data + 1
 
-  recv_data(num_of_recv_data) = data_class(send_data_name, recv_data_name, is_avr, intvl, time_lag, num_of_layer, &
+  recv_data(num_of_recv_data) = data_class(send_data_name, recv_data_name, is_avr, &
+                                           intvl, exchange_type, time_lag, num_of_layer, &
                                            grid_intpl_tag, fill_value, exchange_tag)
   call recv_data(num_of_recv_data)%set_my_exchange(send_comp, send_grid, &
                                                    recv_comp, recv_grid)
@@ -380,19 +432,21 @@ end subroutine recv_my_data
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine interpolate_recv_data(data_name)
+subroutine interpolate_recv_data(data_name, current_sec)
   implicit none
   character(len=*), intent(IN) :: data_name
+  integer(kind=8), intent(IN)          :: current_sec
   type(data_class), pointer :: data_ptr
 
   data_ptr => get_recv_data_ptr(data_name)
 
-  if (data_ptr%get_num_of_layer() == 1) then
-    call data_ptr%interpolate_data_1d()
-  else
-    call data_ptr%interpolate_data_2d()
+  if (mod(current_sec, int(data_ptr%get_intvl(), kind=8)) == 0) then
+    if (data_ptr%get_num_of_layer() == 1) then
+      call data_ptr%interpolate_data_1d()
+    else
+      call data_ptr%interpolate_data_2d()
+    end if
   end if
-  
 end subroutine interpolate_recv_data
 
 !=======+=========+=========+=========+=========+=========+=========+=========+

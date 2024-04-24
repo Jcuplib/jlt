@@ -336,9 +336,9 @@ subroutine init_model_process()
   integer, allocatable :: my_comp_id(:)
   character(len=STR_SHORT), pointer :: total_comp_name(:)
   integer :: p
-
-  call jml_init()
   
+  call jml_init()
+
   my_rank_global = jml_GetMyRankGlobal() 
   num_of_total_pe = jml_GetCommSizeGlobal()
 

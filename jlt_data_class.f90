@@ -20,6 +20,7 @@ type data_class
    logical                       :: avr_flag               ! average data or not
    integer                       :: intvl                  ! exchange interval (SEC)
    integer                       :: time_lag               ! exchange time lag (-1, 1, 0)
+   integer                       :: exchange_type          ! CONCURRENT_SEND_RECV, ADVANCE_SEND_RECV, BEHIND_SEND_RECV, IMMEDIATE_SEND_RECV
    integer                       :: num_of_layer = 1       !
    integer                       :: grid_intpl_tag         ! grid interpolation tag used in the interpolation subroutine
    integer                       :: exchange_tag           ! MPI data exchange tag
@@ -39,6 +40,8 @@ type data_class
    procedure :: get_recv_data_name  ! character(len=STR_SHORT) function ()
    procedure :: is_avr              ! logical function ()
    procedure :: get_intvl           ! integer function ()
+   procedure :: get_time_lag        ! integer function ()
+   procedure :: get_exchange_type   ! integer function ()
    procedure :: get_num_of_layer    ! integer function ()
    procedure :: get_exchange_tag    ! integer function ()
    procedure :: put_data_1d         ! subroutine (data)
@@ -61,13 +64,14 @@ contains
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
 function init_data_class(send_data_name, recv_data_name, avr_flag, &
-                         intvl, time_lag, num_of_layer, intpl_tag, &
+                         intvl, time_lag, exchange_type, num_of_layer, intpl_tag, &
                          fill_value, exchange_tag) result(my_data_class)
   implicit none
   character(len=*), intent(IN) :: send_data_name, recv_data_name
   logical, intent(IN)          :: avr_flag
   integer, intent(IN)          :: intvl
   integer, intent(IN)          :: time_lag
+  integer, intent(IN)          :: exchange_type
   integer, intent(IN)          :: num_of_layer
   integer, intent(IN)          :: intpl_tag
   real(kind=8), intent(IN)     :: fill_value
@@ -79,6 +83,7 @@ function init_data_class(send_data_name, recv_data_name, avr_flag, &
   my_data_class%avr_flag       = avr_flag
   my_data_class%intvl          = intvl
   my_data_class%time_lag       = time_lag
+  my_data_class%exchange_type  = exchange_type
   my_data_class%num_of_layer   = num_of_layer
   my_data_class%grid_intpl_tag = intpl_tag
   my_data_class%fill_value     = fill_value
@@ -196,6 +201,26 @@ end function get_intvl
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
+integer function get_time_lag(self)
+  implicit none
+  class(data_class) ::self
+
+  get_time_lag = self%time_lag
+
+end function get_time_lag
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+integer function get_exchange_type(self)
+  implicit none
+  class(data_class) ::self
+
+  get_exchange_type = self%exchange_type
+
+end function get_exchange_type
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
 integer function get_num_of_layer(self)
   implicit none
   class(data_class) ::self
@@ -217,7 +242,7 @@ end function get_exchange_tag
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
 subroutine put_data_1d(self, data, next_sec, delta_t)
-  use jlt_constant, only : STR_MID
+  use jlt_constant, only : STR_MID, ADVANCE_SEND_RECV
   use jlt_utils, only : put_log, error
   implicit none
   class(data_class)           :: self
@@ -234,11 +259,13 @@ subroutine put_data_1d(self, data, next_sec, delta_t)
      self%put_sec = next_sec
   end if
 
+
+  write(log_str,'("  ",A)') "[put_data_1d ] put data START , data_name = "//trim(self%my_name)
+  call put_log(trim(log_str))
+
   if (self%intvl <= 0) then ! every step send
      call self%my_exchange%local_2_exchange(data, self%data1d)
      call self%my_exchange%send_data_1d(self%data1d, self%exchange_buffer, self%grid_intpl_tag, self%exchange_tag)
-     write(log_str,'("  ",A)') "[put_data_1d ] send    the data, data_name = "//trim(self%my_name)
-     call put_log(trim(log_str))
   else
      if (self%is_avr()) then ! average data
         call self%my_exchange%local_2_exchange(data, self%data1d_tmp)
@@ -254,33 +281,49 @@ subroutine put_data_1d(self, data, next_sec, delta_t)
            self%data1d(i) = self%data1d(i) + self%data1d_tmp(i)*weight
         end do
 
-        write(log_str,'("  ",A,F8.5)') "[put_data_1d ] average the data, data_name = "//trim(self%my_name)//", weight = ",weight
+        write(log_str,'("  ",A,F8.5)') "[put_data_1d ] average data, data_name = "//trim(self%my_name)//", weight = ",weight
         call put_log(trim(log_str))
 
+        if (delta_t == 0) then ! first step
+           if (self%exchange_type == ADVANCE_SEND_RECV) then
+              write(log_str,'("  ",A)') "[put_data_1d ] put data SKIP , data_name = "//trim(self%my_name)
+              call put_log(trim(log_str))
+              return ! skip first step data send
+           end if
+        end if
+        
         if (mod(next_sec, int(self%intvl, kind=8)) == 0) then ! send step
            call self%my_exchange%send_data_1d(self%data1d, self%exchange_buffer, self%grid_intpl_tag, self%exchange_tag)
            self%data1d(:) = 0.d0 ! reset average data
-           write(log_str,'("  ",A)') "[put_data_1d ] send    the data, data_name = "//trim(self%my_name)
-           call put_log(trim(log_str))
         end if
 
      else ! snapshot data
+
+        if (delta_t == 0) then ! first step
+           if (self%exchange_type == ADVANCE_SEND_RECV) then
+              write(log_str,'("  ",A)') "[put_data_1d ] put data SKIP , data_name = "//trim(self%my_name)
+              call put_log(trim(log_str))
+              return ! skip first step data send
+           end if
+        end if
+     
         if (mod(next_sec, int(self%intvl, kind=8)) == 0) then ! send step        
            call self%my_exchange%local_2_exchange(data, self%data1d)
            call self%my_exchange%send_data_1d(self%data1d, self%exchange_buffer, self%grid_intpl_tag, self%exchange_tag)
-           write(log_str,'("  ",A)') "[put_data_1d ] send    the data, data_name = "//trim(self%my_name)
-           call put_log(trim(log_str))
         end if
      end if   
 
   end if
   
+  write(log_str,'("  ",A)') "[put_data_1d ] put data END , data_name = "//trim(self%my_name)
+  call put_log(trim(log_str))
+
 end subroutine put_data_1d
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
 subroutine put_data_2d(self, data, next_sec, delta_t)
-  use jlt_constant, only : STR_MID
+  use jlt_constant, only : STR_MID, ADVANCE_SEND_RECV
   use jlt_utils, only : put_log, error
   implicit none
   class(data_class)           :: self
@@ -297,16 +340,17 @@ subroutine put_data_2d(self, data, next_sec, delta_t)
      self%put_sec = next_sec
   end if
 
+  write(log_str,'("  ",A)') "[put_data_2d ] put data START , data_name = "//trim(self%my_name)
+  call put_log(trim(log_str))
+
   if (self%intvl <= 0) then ! every step send
 
      do k = 1, self%get_num_of_layer()
         call self%my_exchange%local_2_exchange(data(:,k), self%data2d(:,k))
      end do
      
-     !call self%my_exchange%send_data_2d(self%data2d, self%exchange_buffer, self%grid_intpl_tag, self%exchange_tag)
+     call self%my_exchange%send_data_2d(self%data2d, self%exchange_buffer, self%num_of_layer, self%grid_intpl_tag, self%exchange_tag)
 
-     write(log_str,'("  ",A)') "[put_data_2d ] send    the data, data_name = "//trim(self%my_name)
-     call put_log(trim(log_str))
   else
      if (self%is_avr()) then ! average data
 
@@ -319,40 +363,52 @@ subroutine put_data_2d(self, data, next_sec, delta_t)
        
         do k = 1, self%get_num_of_layer()
 
-          call self%my_exchange%local_2_exchange(data(:,k), self%data1d_tmp)
-          
           do i = 1, self%exchange_data_size
              self%data2d(i,k) = self%data2d(i,k) + self%data1d_tmp(i)*weight
           end do
 
        end do
        
-        write(log_str,'("  ",A,F8.5)') "[put_data_2d ] average the data, data_name = "//trim(self%my_name)//", weight = ",weight
+        write(log_str,'("  ",A,F8.5)') "[put_data_2d ] average data, data_name = "//trim(self%my_name)//", weight = ",weight
         call put_log(trim(log_str))
 
+        if (delta_t == 0) then ! first step
+           if (self%exchange_type == ADVANCE_SEND_RECV) then
+              write(log_str,'("  ",A)') "[put_data_2d ] put data SKIP , data_name = "//trim(self%my_name)
+              call put_log(trim(log_str))
+              return ! skip first step data send
+           end if
+        end if
+        
         if (mod(next_sec, int(self%intvl, kind=8)) == 0) then ! send step
-           !call self%my_exchange%send_data_2d(self%data2d, self%exchange_buffer, self%grid_intpl_tag, self%exchange_tag)
-           !self%data2d(:,:) = 0.d0 ! reset average data
-           !write(log_str,'("  ",A)') "[put_data_1d ] send    the data, data_name = "//trim(self%my_name)
-           !call put_log(trim(log_str))
+           call self%my_exchange%send_data_2d(self%data2d, self%exchange_buffer, self%num_of_layer, self%grid_intpl_tag, self%exchange_tag)
+           self%data2d(:,:) = 0.d0 ! reset average data
         end if
 
      else ! snapshot data
+
+        if (delta_t == 0) then ! first step
+           if (self%exchange_type == ADVANCE_SEND_RECV) then
+              write(log_str,'("  ",A)') "[put_data_2d ] put data SKIP , data_name = "//trim(self%my_name)
+              call put_log(trim(log_str))
+              return ! skip first step data send
+           end if
+        end if
+        
         if (mod(next_sec, int(self%intvl, kind=8)) == 0) then ! send step        
-           write(0, *) "put_data_2d, ", self%get_num_of_layer(), size(data,1), size(data,2), size(self%data2d,1), size(self%data2d,2)
-           
            do k = 1, self%get_num_of_layer()
               call self%my_exchange%local_2_exchange(data(:,k), self%data2d(:,k))
            end do
            
-           call self%my_exchange%send_data_2d(self%data2d, self%exchange_buffer, self%grid_intpl_tag, self%exchange_tag)
-           write(log_str,'("  ",A)') "[put_data_2d ] send    the data, data_name = "//trim(self%my_name)
-           call put_log(trim(log_str))
+           call self%my_exchange%send_data_2d(self%data2d, self%exchange_buffer, self%num_of_layer, self%grid_intpl_tag, self%exchange_tag)
         end if
      end if   
 
   end if
   
+  write(log_str,'("  ",A)') "[put_data_2d ] put data END , data_name = "//trim(self%my_name)
+  call put_log(trim(log_str))
+
 end subroutine put_data_2d
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
@@ -366,9 +422,11 @@ subroutine recv_data_1d(self, current_sec)
   character(len=STR_MID) :: log_str
 
   if (mod(current_sec, int(self%intvl, kind=8)) == 0) then
-    call self%my_exchange%recv_data_1d(self%exchange_buffer, self%exchange_tag)
-    write(log_str,'("  ",A,I5)') "[recv_data_1d] recv    the data, data_name = "//trim(self%my_name) &
+    write(log_str,'("  ",A,I5)') "[recv_data_1d] recv data START, data_name = "//trim(self%my_name) &
                                 //", exchange_tag = ", self%exchange_tag
+    call put_log(trim(log_str))
+    call self%my_exchange%recv_data_1d(self%exchange_buffer, self%exchange_tag)
+    write(log_str,'("  ",A)') "[recv_data_1d] recv data END"
     call put_log(trim(log_str))
   end if
 
@@ -385,9 +443,11 @@ subroutine recv_data_2d(self, current_sec)
   character(len=STR_MID) :: log_str
   
   if (mod(current_sec, int(self%intvl, kind=8)) == 0) then
-    call self%my_exchange%recv_data_2d(self%exchange_buffer, self%exchange_tag)
-    write(log_str,'("  ",A,I5)') "[recv_data_2d] recv    the data, data_name = "//trim(self%my_name) &
+    write(log_str,'("  ",A,I5)') "[recv_data_2d] recv data, data_name = "//trim(self%my_name) &
                                 //", exchange_tag = ", self%exchange_tag
+    call put_log(trim(log_str))
+    call self%my_exchange%recv_data_2d(self%exchange_buffer, self%num_of_layer, self%exchange_tag)
+    write(log_str,'("  ",A)') "[recv_data_2d] recv data END"
     call put_log(trim(log_str))
   end if
  
@@ -402,7 +462,7 @@ subroutine interpolate_data_1d(self)
   real(kind=8), pointer    :: intpl_data(:,:)
 
   if (self%my_exchange%is_my_intpl()) then
-     allocate(intpl_data(size(self%data1d),1))
+     allocate(intpl_data(size(self%data1d), 1))
      intpl_data(:,:) = 0.d0     
      call self%my_exchange%interpolate_data(self%exchange_buffer, intpl_data, 1, self%grid_intpl_tag)
      self%data1d(:) = intpl_data(:,1)
@@ -421,36 +481,17 @@ subroutine interpolate_data_2d(self)
   integer                  :: num_of_layer
   integer                  :: k
 
-  num_of_layer = size(self%data2d, 2)
+  num_of_layer = self%num_of_layer
   
 
   if (self%my_exchange%is_my_intpl()) then
-    !if (my_map%get_my_rank() == 0) then ! root
-    !   allocate(recv_data(my_map%get_data_size(),num_of_layer))
-    !   allocate(intpl_data(my_map%get_my_whole_data_size(), num_of_layer))
-    !else
-    !   allocate(recv_data(1,1))
-    !   allocate(intpl_data(1,1))
-    !end if
-
-    !do k = 1, num_of_layer
-    !  call my_map%gather_recv_data_to_intpl(self%exchange_buffer(:,k), intpl_data(:,k))
-    !end do
-   
-    !if (my_map%get_my_rank() == 0) then
-    !  call self%my_exchange%interpolate_data(intpl_data, recv_data, num_of_layer, self%grid_intpl_tag)
-    !end if
-     
-    !do k = 1, num_of_layer
-    !  call my_map%scatter_data_from_intpl(self%data2d(:,k), recv_data(:,k))
-    !end do
-   
-    deallocate(intpl_data)
-    deallocate(recv_data)
-  else
-    self%data2d(:,:) = self%exchange_buffer(:,:)
+     allocate(intpl_data(size(self%data2d,1), num_of_layer))
+     intpl_data(:,:) = 0.d0     
+     call self%my_exchange%interpolate_data(self%exchange_buffer, intpl_data, num_of_layer, self%grid_intpl_tag)
+     self%data2d(:,:) = intpl_data(:,:)
+     deallocate(intpl_data)
   end if
- 
+
 end subroutine interpolate_data_2d
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
@@ -469,16 +510,15 @@ subroutine get_data_1d(self, data, current_sec, is_get_ok)
 
      data(:) = self%fill_value  ! set fill value
 
-     write(log_str,'("  ",A,F10.5)') "[get_data_1d ] get data, data_name = "//trim(self%my_name), data(1)
-     call put_log(trim(log_str))
-
      call self%my_exchange%exchange_2_local(self%data1d, data)
 
      is_get_ok = .true.
 
-     write(log_str,'("  ",A,F10.5)') "[get_data_1d ] get data, data_name = "//trim(self%my_name), data(1)
+     write(log_str,'("  ",A,F15.5,F15.5)') "[get_data_1d ] get data OK, data_name = "//trim(self%my_name), minval(data), maxval(data)
      call put_log(trim(log_str))
   else
+     write(log_str,'("  ",A)') "[get_data_1d ] get data SKIP"
+     call put_log(trim(log_str))
      is_get_ok = .false.
    end if
    
@@ -501,15 +541,17 @@ subroutine get_data_2d(self, data, current_sec, is_get_ok)
 
      data(:,:) = self%fill_value  ! set fill value
 
-     !do k = 1, self%get_num_of_layer()
-     !   call my_map%exchange_2_local(data(:,k), self%data2d(:,k))
-     !end do
+     do k = 1, self%get_num_of_layer()
+        call self%my_exchange%exchange_2_local(self%data2d(:,k), data(:,k))
+     end do
      
      is_get_ok = .true.
 
-     write(log_str,'("  ",A)') "[get_data_2d ] get data, data_name = "//trim(self%my_name)
+     write(log_str,'("  ",A,F15.5,F15.5)') "[get_data_2d ] get data OK, data_name = "//trim(self%my_name), minval(data(:,1:self%get_num_of_layer())), maxval(data(:,1:self%get_num_of_layer()))
      call put_log(trim(log_str))
   else
+     write(log_str,'("  ",A)') "[get_data_2d ] get data SKIP"
+     call put_log(trim(log_str))
      is_get_ok = .false.
    end if
    

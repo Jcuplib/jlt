@@ -7,11 +7,32 @@
 
 
 -----------------------------------------------------------------
-Version::1.000000
+Version::0.010000
 Date:2022/07/15
+
 File:
 Routines
 
 Detail
-V1.0リリース
+V0.010リリース
+受信側補間、1次元データのみを対象
+
+-----------------------------------------------------------------
+
+Version:0.020000
+Date:2024/04/24
+
+Files:jlt_comp.f90, jlt_data.f90, jlt_data_class.f90, jlt_exchange_class.f90
+      jlt_interface.f90, jlt_mpi_lib.f90
+
+Routines
+ jlt_isend_double_1d_model3  : [add]
+ jlt_irecv_double_1d_model3  : [add]
+ jlt_isend_double_2d_model3  : [add]
+ jlt_irecv_double_2d_model3  : [add]
+ ほか多数
+
+Detail
+ 鉛直層を持つ2.5次元データの交換に対応。
+
 

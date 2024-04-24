@@ -1,6 +1,5 @@
-
 module jlt_interface
-  use jlt_constant, only : NUM_OF_EXCHANGE_DATA, STR_SHORT
+  use jlt_constant, only : NUM_OF_EXCHANGE_DATA, STR_SHORT, STR_MID
   use jlt_mpi_lib, only : jlt_set_world => jml_set_global_comm, &
                           jlt_get_world => jml_get_global_comm
   use jlt_comp, only : jlt_get_num_of_component   => get_num_of_total_component, &
@@ -8,8 +7,7 @@ module jlt_interface
                        jlt_get_comp_num_from_name => get_comp_id_from_name, &
                        jlt_is_my_component        => is_my_component, &
                        jlt_is_model_running       => is_model_running
-  use jlt_data, only : jlt_set_send_data          => set_send_data, &
-                       jlt_set_recv_data          => set_recv_data
+  use jlt_data, only : jlt_set_data               => set_data
   implicit none
   private
   
@@ -28,12 +26,12 @@ module jlt_interface
   public :: jlt_def_varp                    ! subroutine ! dummy subroutine
   public :: jlt_def_varg                    ! subroutine ! dummy subroutine
   public :: jlt_end_var_def                 ! subroutnne () ! dummy subroutine
-  public :: jlt_set_send_data               ! subroutine (send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, 
-                                            !             is_avr, intvl, num_of_layer, &
+  public :: jlt_set_data                    ! subroutine (send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, 
+                                            !             is_avr, intvl, time_lag, num_of_layer, &
                                             !             grid_intpl_tag, fill_value, exchange_tag)
-  public :: jlt_set_recv_data               ! subroutine (send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, 
-                                            !             is_avr, intvl, num_of_layer, &
-                                            !             grid_intpl_tag, fill_value, exchange_tag)
+  !public :: jlt_set_recv_data               ! subroutine (send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, 
+  !                                          !             is_avr, intvl, num_of_layer, &
+  !                                          !             grid_intpl_tag, fill_value, exchange_tag)
   public :: jlt_set_fill_value              ! subroutine (fill_value)  ! dummy 
   public :: jlt_get_fill_value              ! real(kind=8) function () ! dummy
   public :: jlt_set_mapping_table           ! subroutine (my_name, send_com, send_grid, recv_comp, recv_grid, map_tag, send_index, recv_index, coef)
@@ -159,6 +157,7 @@ subroutine jlt_initialize(model_name, default_time_unit, log_level, log_stderr)
   if (my_comp_name == "") then ! jlt_set_new_comp not called
      call jlt_set_new_comp(model_name)
   end if
+
   
   call init_model_process() ! 2014/08/27 [MOD]
 
@@ -358,7 +357,7 @@ subroutine jlt_end_grid_def()
   integer :: ierror
 
   call mpi_barrier(MPI_COMM_WORLD, ierror)
-  write(0, *) "MPI_barrier OK"
+  !write(0, *) "MPI_barrier OK"
   
 end subroutine jlt_end_grid_def
 
@@ -565,33 +564,33 @@ subroutine jlt_set_time(comp_name, current_time, delta_t)
   character(len=STR_MID) :: log_str
   integer :: i
   
-  call put_log("------------------------------------------------------------------------------------------")
-  call put_log("------------------------------------------------------------------------------------------")
-
-
   current_sec = next_sec
  
   next_sec = current_sec + delta_t
 
   current_delta_t = delta_t
 
-  write(log_str, '(A,I8,A,I8,A,I5)') "jlt_set_time, current_sec = ", current_sec, &
-                                    ", next_sec = ", next_sec, ", delta_t = ", delta_t
+  call put_log("------------------------------------------------------------------------------------------")
+
+  write(log_str,'("  ",A, I8, A, I8, A, I5)') "[jlt_set_time] set time START, current_sec =  ", current_sec, &
+                                              ", next_sec = ", next_sec, ", delta_t = ", delta_t
   call put_log(trim(log_str))
   
+
   do i = 1, get_num_of_recv_data()
      call recv_my_data(get_recv_data_name(i), current_sec)
   end do
-
 
   call jml_send_waitall()
   call jml_recv_waitall()
 
   do i = 1, get_num_of_recv_data()
-     call interpolate_recv_data(get_recv_data_name(i))
+     call interpolate_recv_data(get_recv_data_name(i), current_sec)
   end do
 
-  call put_log("------------------------------------------------------------------------------------------")
+  write(log_str,'("  ",A)') "[jlt_set_time] set time END"
+  call put_log(trim(log_str))
+
   call put_log("------------------------------------------------------------------------------------------")
 
 end subroutine jlt_set_time
@@ -600,12 +599,24 @@ end subroutine jlt_set_time
 
 subroutine jlt_put_data_1d(data_name, data, data_vector)
   use jlt_data, only : put_data_1d
+  use jlt_utils, only : put_log
   implicit none
   character(len=*), intent(IN)       :: data_name
   real(kind=8), intent(IN)           :: data(:)
   real(kind=8), optional, intent(IN) :: data_vector(:)
+  character(len=STR_MID) :: log_str
   
+  call put_log("------------------------------------------------------------------------------------------")
+
+  write(log_str,'("  ",A)') "[jlt_put_data_1d ] put data START , data_name = "//trim(data_name)
+  call put_log(trim(log_str))
+
   call put_data_1d(data_name, data, next_sec, current_delta_t)
+
+  write(log_str,'("  ",A)') "[jlt_put_data_1d ] put data END , data_name = "//trim(data_name)
+  call put_log(trim(log_str))
+
+  call put_log("------------------------------------------------------------------------------------------")
 
 end subroutine jlt_put_data_1d
 
@@ -626,13 +637,25 @@ end subroutine jlt_put_data_1d_ptr
 
 subroutine jlt_get_data_1d(data_name, data, data_vector, is_recv_ok)
   use jlt_data, only : get_data_1d
+  use jlt_utils, only : put_log
   implicit none
   character(len=*),intent(IN)           :: data_name
   real(kind=8), intent(INOUT)           :: data(:)
   real(kind=8), optional, intent(INOUT) :: data_vector(:)
   logical, intent(INOUT)                :: is_recv_ok
+  character(len=STR_MID) :: log_str
+
+  call put_log("------------------------------------------------------------------------------------------")
+
+  write(log_str,'("  ",A)') "[jlt_get_data_1d ] get data START , data_name = "//trim(data_name)
+  call put_log(trim(log_str))
 
   call get_data_1d(data_name, data, current_sec, is_recv_ok)
+
+  write(log_str,'("  ",A)') "[jlt_get_data_1d ] get data END , data_name = "//trim(data_name)
+  call put_log(trim(log_str))
+
+  call put_log("------------------------------------------------------------------------------------------")
 
 end subroutine jlt_get_data_1d
 
@@ -655,12 +678,24 @@ end subroutine jlt_get_data_1d_ptr
 
 subroutine jlt_put_data_25d(data_name, data, data_vector)
   use jlt_data, only : put_data_2d
+  use jlt_utils, only : put_log
   implicit none
   character(len=*), intent(IN)       :: data_name
   real(kind=8), intent(IN)           :: data(:,:)
   real(kind=8), optional, intent(IN) :: data_vector(:)
+  character(len=STR_MID) :: log_str
   
+  call put_log("------------------------------------------------------------------------------------------")
+
+  write(log_str,'("  ",A)') "[jlt_put_data_25d ] put data START , data_name = "//trim(data_name)
+  call put_log(trim(log_str))
+
   call put_data_2d(data_name, data, next_sec, current_delta_t)
+
+  write(log_str,'("  ",A)') "[jlt_put_data_25d ] put data END , data_name = "//trim(data_name)
+  call put_log(trim(log_str))
+
+  call put_log("------------------------------------------------------------------------------------------")
 
 end subroutine jlt_put_data_25d
 
@@ -681,13 +716,25 @@ end subroutine jlt_put_data_25d_ptr
 
 subroutine jlt_get_data_25d(data_name, data, data_vector, is_recv_ok)
   use jlt_data, only : get_data_2d
+  use jlt_utils, only : put_log
   implicit none
   character(len=*),intent(IN)           :: data_name
   real(kind=8), intent(INOUT)           :: data(:,:)
   real(kind=8), optional, intent(INOUT) :: data_vector(:)
   logical, intent(INOUT)                :: is_recv_ok
+  character(len=STR_MID) :: log_str
   
+  call put_log("------------------------------------------------------------------------------------------")
+
+  write(log_str,'("  ",A)') "[jlt_get_data_25d ] get data START , data_name = "//trim(data_name)
+  call put_log(trim(log_str))
+
   call get_data_2d(data_name, data, current_sec, is_recv_ok)
+
+  write(log_str,'("  ",A)') "[jlt_get_data_25d ] get data END , data_name = "//trim(data_name)
+  call put_log(trim(log_str))
+
+  call put_log("------------------------------------------------------------------------------------------")
 
 end subroutine jlt_get_data_25d
 

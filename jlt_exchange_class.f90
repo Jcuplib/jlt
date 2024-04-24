@@ -153,24 +153,24 @@ subroutine set_mapping_table(self, send_comp_name, send_grid_name, recv_comp_nam
   
   call put_log("jlt_exchange_class : set_mapping_table, make_local_mapping_table  end")
 
-  write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "global mapping table"
-  write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "send_comp = "//trim(send_comp_name)//", recv_comp = "//trim(recv_comp_name)
+  !write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "global mapping table"
+  !write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "send_comp = "//trim(send_comp_name)//", recv_comp = "//trim(recv_comp_name)
 
-  do i = 1, size(send_grid)
-     write(300+source_comp_id*100 + my_grid%get_my_rank(), *) send_grid(i), recv_grid(i), coef(i)
-  end do
+  !do i = 1, size(send_grid)
+  !   write(300+source_comp_id*100 + my_grid%get_my_rank(), *) send_grid(i), recv_grid(i), coef(i)
+  !end do
 
   my_grid_index => my_grid%get_grid_index_ptr()
 
-  write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "my grid_index"
-  do i = 1, size(my_grid_index)
-     write(300+source_comp_id*100 + my_grid%get_my_rank(), *) my_grid_index(i)
-  end do
+  !write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "my grid_index"
+  !do i = 1, size(my_grid_index)
+  !   write(300+source_comp_id*100 + my_grid%get_my_rank(), *) my_grid_index(i)
+  !end do
   
-  write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "local mapping table,", self%index_size
-  do i = 1, self%index_size
-     write(300+source_comp_id*100 + my_grid%get_my_rank(), *) self%send_grid_index(i), self%recv_grid_index(i), self%coef(i), self%target_rank(i)
-  end do
+  !write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "local mapping table,", self%index_size
+  !do i = 1, self%index_size
+  !   write(300+source_comp_id*100 + my_grid%get_my_rank(), *) self%send_grid_index(i), self%recv_grid_index(i), self%coef(i), self%target_rank(i)
+  !end do
 
   call put_log("jlt_exchange_class : set_mapping_table, reorder_index_by_target_rank start")
 
@@ -220,15 +220,15 @@ subroutine set_mapping_table(self, send_comp_name, send_grid_name, recv_comp_nam
 
   return
   
-  write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "exchange rank"
-  do i = 1, self%ex_map%num_of_exchange_rank
-     write(300+source_comp_id*100 + my_grid%get_my_rank(), *) self%ex_map%exchange_rank(i), self%ex_map%num_of_exchange(i)
-  end do
+  !write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "exchange rank"
+  !do i = 1, self%ex_map%num_of_exchange_rank
+  !   write(300+source_comp_id*100 + my_grid%get_my_rank(), *) self%ex_map%exchange_rank(i), self%ex_map%num_of_exchange(i)
+  !end do
 
-  write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "exchange index"
-  do i = 1, size(self%ex_map%exchange_index)
-     write(300+source_comp_id*100 + my_grid%get_my_rank(), *) self%ex_map%exchange_index(i)
-  end do
+  !write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "exchange index"
+  !do i = 1, size(self%ex_map%exchange_index)
+  !   write(300+source_comp_id*100 + my_grid%get_my_rank(), *) self%ex_map%exchange_index(i)
+  !end do
   
   call put_log(" set_mapping_table : exchange map info start")
 
@@ -307,7 +307,7 @@ subroutine send_my_grid_index(self, grid_index)
      exchange_buffer(i) = grid_index(self%ex_map%conv_table(i))
   end do
 
-  write(0, *) "send_my_grid_index , ", trim(self%my_name), self%ex_map%num_of_exchange_rank
+  !write(0, *) "send_my_grid_index , ", trim(self%my_name), self%ex_map%num_of_exchange_rank
 
   do i = 1, self%ex_map%num_of_exchange_rank
      send_data_ptr => exchange_buffer(self%ex_map%offset(i)+1)
@@ -340,7 +340,7 @@ subroutine recv_send_grid_index(self)
   !end do
   exchange_buffer(:) = 0
 
-  write(0, *) "recv_send_grid_index , ", trim(self%my_name), self%ex_map%num_of_exchange_rank
+  !write(0, *) "recv_send_grid_index , ", trim(self%my_name), self%ex_map%num_of_exchange_rank
   
   do i = 1, self%ex_map%num_of_exchange_rank
      recv_data_ptr => exchange_buffer(self%ex_map%offset(i)+1)
@@ -462,7 +462,7 @@ end subroutine exchange_2_local
 
 subroutine send_data_1d(self, data, exchange_buffer, intpl_tag, exchange_tag)
   use jlt_constant, only : STR_MID
-  use jlt_utils, only    : put_log
+  use jlt_utils, only    : put_log, get_log_level, DETAIL_LOG
   use jlt_mpi_lib, only : jml_IsendModel2, jml_send_waitall
   implicit none
   class(exchange_class)       :: self
@@ -479,7 +479,9 @@ subroutine send_data_1d(self, data, exchange_buffer, intpl_tag, exchange_tag)
   real(kind=8), pointer       :: data_ptr
   integer :: i
   
-  call put_log("------------------------------------------------------------------------------------------")
+
+  write(log_str,'("  ",A,I5)') "[send_data_1d] send data START, exchange_tag = ", exchange_tag
+  call put_log(trim(log_str))
 
   if (self%is_my_intpl()) then
     ! for send side interpolation, interpolation code will be implemented 
@@ -489,65 +491,95 @@ subroutine send_data_1d(self, data, exchange_buffer, intpl_tag, exchange_tag)
     end do
   end if
  
+  if (get_log_level() == DETAIL_LOG) then
+     write(log_str,'("  ",A,F15.5,A,F15.5)') "[send_data_1d] min  = ", minval(data), ", max = ", maxval(data)
+     call put_log(trim(log_str))
+  end if
+  
   do i = 1, self%ex_map%num_of_exchange_rank
-       target_rank = self%ex_map%exchange_rank(i)
-       num_of_data = self%ex_map%num_of_exchange(i)
-       offset      = self%ex_map%offset(i)
-       data_ptr    => exchange_buffer(offset+1,1)
-       call jml_ISendModel2(self%send_comp_id, data_ptr, 1, num_of_data, 1, 1, &
-                               self%recv_comp_id, target_rank, exchange_tag)
+     target_rank = self%ex_map%exchange_rank(i)
+     num_of_data = self%ex_map%num_of_exchange(i)
+     offset      = self%ex_map%offset(i)
+     data_ptr    => exchange_buffer(offset+1,1)
+
+     if (get_log_level() == DETAIL_LOG) then
+        write(log_str,'("  ",A,I8,A,I10)') "[send_data_1d] target_rank = ", target_rank, ", num_of_data = ", num_of_data
+        call put_log(trim(log_str))
+     end if
+     
+     call jml_ISendModel2(self%send_comp_id, data_ptr, 1, num_of_data, 1, 1, &
+                          self%recv_comp_id, target_rank, exchange_tag)
   end do
 
-  write(log_str,'("  ",A,I5)') "[send_data_1d] send data OK, exchange_tag = ", exchange_tag
+  write(log_str,'("  ",A,I5)') "[send_data_1d] send data END, exchange_tag = ", exchange_tag
   call put_log(trim(log_str))
-  call put_log("------------------------------------------------------------------------------------------")
   
 end subroutine send_data_1d
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine send_data_2d(self, data, exchange_buffer, intpl_tag, exchange_tag)
+subroutine send_data_2d(self, data, exchange_buffer, num_of_layer, intpl_tag, exchange_tag)
   use jlt_constant, only : STR_MID
-  use jlt_utils, only    : put_log
-  use jlt_mpi_lib, only : jml_IsendModel2, jml_send_waitall
+  use jlt_utils, only    : put_log, get_log_level, DETAIL_LOG
+  use jlt_mpi_lib, only : jml_IsendModel3, jml_send_waitall
   implicit none
   class(exchange_class)       :: self
   real(kind=8), intent(IN)    :: data(:,:)
   real(kind=8), pointer       :: exchange_buffer(:,:)
+  integer, intent(IN)         :: num_of_layer
   integer, intent(IN)         :: intpl_tag
   integer, intent(IN)         :: exchange_tag
   real(kind=8), pointer       :: send_data(:,:)
   real(kind=8), pointer       :: intpl_data(:,:)
-  integer                     :: num_of_layer
   character(len=STR_MID)      :: log_str
   integer                     :: target_rank
   integer                     :: num_of_data
   integer                     :: offset
-  real(kind=8), pointer       :: data_ptr
+  type data_ptr_type
+     real(kind=8), pointer       :: data_ptr
+  end type data_ptr_type
+  type (data_ptr_type), allocatable :: ptr_array(:)
   integer :: i, k
   
-  call put_log("------------------------------------------------------------------------------------------")
-  num_of_layer = size(data, 2)
+  write(log_str,'("  ",A,I5)') "[send_data_2d] send data START, exchange_tag = ", exchange_tag
+  call put_log(trim(log_str))
 
+  if (get_log_level() == DETAIL_LOG) then
+     write(log_str,'("  ",A,F15.5,A,F15.5)') "[send_data_2d] min  = ", minval(data), ", max = ", maxval(data)
+     call put_log(trim(log_str))
+  end if
+
+  allocate(ptr_array(num_of_layer))
+  
     do k = 1, num_of_layer
        if (self%is_my_intpl()) then
        else
           exchange_buffer(:,k) = data(:,k)
        end if
 
-       do i = 1, self%ex_map%num_of_exchange_rank
+    end do
+    
+    do i = 1, self%ex_map%num_of_exchange_rank
          target_rank = self%ex_map%exchange_rank(i)
          num_of_data = self%ex_map%num_of_exchange(i)
          offset      = self%ex_map%offset(i)
-         data_ptr    => exchange_buffer(offset+1,k)
-         !call jml_ISendModel2(self%my_map%get_comp_id(), data_ptr, 1, num_of_data, 1, 1, &
-         !                        self%target_map%get_comp_id(), target_rank, exchange_tag)
-      end do
+         ptr_array(k)%data_ptr    => exchange_buffer(offset + 1, k)
+
+         if (get_log_level() == DETAIL_LOG) then
+            write(log_str,'("  ",A,I8,A,I10, A, F15.5, F15.5)') "[send_data_2d] target_rank = ", target_rank, ", num_of_data = ", num_of_data, &
+                 ", min max = ", minval(exchange_buffer(offset+1:offset+num_of_data, 1:num_of_layer)), &
+                 maxval(exchange_buffer(offset+1:offset+num_of_data, 1:num_of_layer))
+            call put_log(trim(log_str))
+         end if
+         call jml_ISendModel3(self%send_comp_id, exchange_buffer(offset+1:offset+num_of_data, 1:num_of_layer), 1, num_of_data, 1, num_of_layer, &
+                              self%recv_comp_id, target_rank, exchange_tag)
+         !call jml_ISendModel2(self%send_comp_id, ptr_array(k)%data_ptr, 1, num_of_data, 1, 1, &
+         !                    self%recv_comp_id, target_rank, exchange_tag)
     end do
-    write(log_str,'("  ",A,I5)') "[send_data_1d] send data OK, exchange_tag = ", exchange_tag
+
+    write(log_str,'("  ",A,I5)') "[send_data_2d] send data END, exchange_tag = ", exchange_tag
     call put_log(trim(log_str))
  
- call put_log("------------------------------------------------------------------------------------------")
   
 end subroutine send_data_2d
 
@@ -555,7 +587,7 @@ end subroutine send_data_2d
 
 subroutine recv_data_1d(self, exchange_buffer, exchange_tag)
   use jlt_constant, only : STR_MID
-  use jlt_utils, only    : put_log
+  use jlt_utils, only    : put_log, get_log_level, DETAIL_LOG
   use jlt_mpi_lib, only : jml_IrecvModel2, jml_recv_waitall
   implicit none
   class(exchange_class)       :: self
@@ -568,43 +600,57 @@ subroutine recv_data_1d(self, exchange_buffer, exchange_tag)
   real(kind=8), pointer       :: data_ptr
   integer :: i
   
-  call put_log("------------------------------------------------------------------------------------------")
+  write(log_str,'("  ",A,I5)') "[recv_data_1d] recv data START, exchange_tag = ", exchange_tag
+  call put_log(trim(log_str))
 
      do i = 1, self%ex_map%num_of_exchange_rank
        target_rank = self%ex_map%exchange_rank(i)
        num_of_data = self%ex_map%num_of_exchange(i)
        offset      = self%ex_map%offset(i)
        data_ptr    => exchange_buffer(offset+1, 1)
+
+       if (get_log_level() == DETAIL_LOG) then
+          write(log_str,'("  ",A,I8,A,I10)') "[recv_data_1d] target_rank = ", target_rank, ", num_of_data = ", num_of_data
+          call put_log(trim(log_str))
+       end if
+
        call jml_IrecvModel2(self%recv_comp_id, data_ptr, 1, num_of_data, 1, 1, &
                            self%send_comp_id, target_rank, exchange_tag)
      end do
 
-  call put_log("------------------------------------------------------------------------------------------")
-
+  write(log_str,'("  ",A,I5)') "[recv_data_1d] recv data END, exchange_tag = ", exchange_tag
+  call put_log(trim(log_str))
+  !if (get_log_level() == DETAIL_LOG) then
+  !   write(log_str,'("  ",A,F15.5,A,F15.5)') "[recv_data_1d] min = ", minval(exchange_buffer(:,1)), &
+  !                                                        ", max = ", maxval(exchange_buffer(:,1))
+  !   call put_log(trim(log_str))
+  !end if
+  
 end subroutine recv_data_1d
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine recv_data_2d(self, exchange_buffer, exchange_tag)
+subroutine recv_data_2d(self, exchange_buffer, num_of_layer, exchange_tag)
   use jlt_constant, only : STR_MID
-  use jlt_utils, only    : put_log
-  use jlt_mpi_lib, only : jml_IrecvModel2, jml_recv_waitall
+  use jlt_utils, only    : put_log, get_log_level, DETAIL_LOG
+  use jlt_mpi_lib, only : jml_IrecvModel3, jml_recv_waitall
   implicit none
   class(exchange_class)       :: self
   real(kind=8), pointer       :: exchange_buffer(:,:)
+  integer, intent(IN)         :: num_of_layer
   integer, intent(IN)         :: exchange_tag
-  real(kind=8), pointer       :: recv_data(:,:)
-  real(kind=8), pointer       :: intpl_data(:,:)
-  integer                     :: num_of_layer
   character(len=STR_MID)      :: log_str
   integer                     :: target_rank
   integer                     :: num_of_data
   integer                     :: offset
-  real(kind=8), pointer       :: data_ptr
+  type data_ptr_type
+     real(kind=8), pointer    :: data_ptr
+  end type data_ptr_type
+  type (data_ptr_type), allocatable  :: ptr_array(:) 
   integer :: i, k
   
-  call put_log("------------------------------------------------------------------------------------------")
-
+  write(log_str,'("  ",A,I5)') "[recv_data_2d] recv data START, exchange_tag = ", exchange_tag
+  call put_log(trim(log_str))
 
   if (self%intpl_flag) then ! my interpolation
 
@@ -612,11 +658,37 @@ subroutine recv_data_2d(self, exchange_buffer, exchange_tag)
   else
 
   end if
+
+  allocate(ptr_array(num_of_layer))
   
-  deallocate(recv_data)
-  deallocate(intpl_data)
+  do i = 1, self%ex_map%num_of_exchange_rank
+       target_rank = self%ex_map%exchange_rank(i)
+       num_of_data = self%ex_map%num_of_exchange(i)
+       offset      = self%ex_map%offset(i)
+       !ptr_array(k)%data_ptr    => exchange_buffer(offset+1, k)
+
+       if (get_log_level() == DETAIL_LOG) then
+          write(log_str,'("  ",A,I8,A,I10)') "[recv_data_2d] target_rank = ", target_rank, ", num_of_data = ", num_of_data
+          call put_log(trim(log_str))
+       end if
+
+       call jml_IrecvModel3(self%recv_comp_id, exchange_buffer(offset+1:offset+num_of_data, 1:num_of_layer), 1, num_of_data, 1, num_of_layer,  &
+                            self%send_comp_id, target_rank, exchange_tag+1000*k)
+       !call jml_IrecvModel2(self%recv_comp_id, ptr_array(k)%data_ptr, 1, num_of_data, 1,1,  &
+       !                     self%send_comp_id, target_rank, exchange_tag)
+
+  end do
+
+  deallocate(ptr_array)
   
-  call put_log("------------------------------------------------------------------------------------------")
+  write(log_str,'("  ",A,I5)') "[recv_data_2d] recv data END, exchange_tag = ", exchange_tag
+  call put_log(trim(log_str))
+  !if (get_log_level() == DETAIL_LOG) then
+  !   write(log_str,'("  ",A,F15.5,A,F15.5)') "[recv_data_2d] min = ", minval(exchange_buffer(:,1:num_of_layer)), &
+  !                                                        ", max = ", maxval(exchange_buffer(:,1:num_of_layer))
+  !   call put_log(trim(log_str))
+  !end if
+  
 
 end subroutine recv_data_2d
 
@@ -624,6 +696,7 @@ end subroutine recv_data_2d
 
 subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag)
   use jlt_grid, only : get_grid_ptr
+  use jlt_utils, only : put_log
   implicit none
   class(exchange_class)       :: self
   real(kind=8), intent(IN)    :: send_data(:,:)
@@ -638,6 +711,10 @@ subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag)
   real(kind=8) :: missing_value
   integer :: i, k, n
   type(grid_class), pointer   :: my_grid
+  character(len=STR_MID)      :: log_str
+  
+  write(log_str,'("  ",A,I5)') "[interpolate_data] interpolate data START, intpl_tag = ", intpl_tag
+  call put_log(trim(log_str))
 
   my_grid => get_grid_ptr(trim(self%recv_grid_name))
   
@@ -693,6 +770,9 @@ subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag)
     end do
  end if
  
+  write(log_str,'("  ",A,I5)') "[interpolate_data] interpolate data END"
+  call put_log(trim(log_str))
+
   !write(0, *) "interpolate_data min, max = ", minval(send_data), maxval(send_data), minval(recv_data), maxval(recv_data)
 end subroutine interpolate_data
 
