@@ -135,6 +135,7 @@ subroutine set_mapping_table(self, send_comp_name, send_grid_name, recv_comp_nam
 
   call put_log("jlt_exchange_class : set_mapping_table, make_local_mapping_table  start")
 
+  
   if (trim(self%my_name) == trim(send_comp_name)) then
      my_grid => get_grid_ptr(trim(send_grid_name))
      
@@ -152,6 +153,7 @@ subroutine set_mapping_table(self, send_comp_name, send_grid_name, recv_comp_nam
   end if
   
   call put_log("jlt_exchange_class : set_mapping_table, make_local_mapping_table  end")
+
 
   !write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "global mapping table"
   !write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "send_comp = "//trim(send_comp_name)//", recv_comp = "//trim(recv_comp_name)
@@ -171,7 +173,7 @@ subroutine set_mapping_table(self, send_comp_name, send_grid_name, recv_comp_nam
   !do i = 1, self%index_size
   !   write(300+source_comp_id*100 + my_grid%get_my_rank(), *) self%send_grid_index(i), self%recv_grid_index(i), self%coef(i), self%target_rank(i)
   !end do
-
+  
   call put_log("jlt_exchange_class : set_mapping_table, reorder_index_by_target_rank start")
 
   call reorder_index_by_target_rank(self%send_grid_index, self%recv_grid_index, self%coef, self%target_rank)
@@ -179,7 +181,6 @@ subroutine set_mapping_table(self, send_comp_name, send_grid_name, recv_comp_nam
   call put_log("jlt_exchange_class : set_mapping_table, reorder_index_by_target_rank end")
 
   call put_log("jlt_exchange_class : set_mapping_table, make_exchange_table start")
-
 
   if (trim(self%my_name) == trim(send_comp_name)) then
      call make_exchange_table(self%target_rank, self%send_grid_index, &
@@ -191,12 +192,12 @@ subroutine set_mapping_table(self, send_comp_name, send_grid_name, recv_comp_nam
                               self%ex_map%num_of_exchange_rank, self%ex_map%exchange_rank, &
                               self%ex_map%num_of_exchange, self%ex_map%offset, self%ex_map%exchange_index) 
      self%ex_map%exchange_data_size = size(self%ex_map%exchange_index)
-
   end if
 
   call put_log("jlt_exchange_class : set_mapping_table, make_exchange_table end")
 
   call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table start")
+
 
   if (trim(self%my_name) ==  trim(send_comp_name)) then
     call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 1")
@@ -307,8 +308,6 @@ subroutine send_my_grid_index(self, grid_index)
      exchange_buffer(i) = grid_index(self%ex_map%conv_table(i))
   end do
 
-  !write(0, *) "send_my_grid_index , ", trim(self%my_name), self%ex_map%num_of_exchange_rank
-
   do i = 1, self%ex_map%num_of_exchange_rank
      send_data_ptr => exchange_buffer(self%ex_map%offset(i)+1)
      data_tag = jml_GetMyrank(self%send_comp_id)*100000+self%ex_map%exchange_rank(i)
@@ -335,13 +334,9 @@ subroutine recv_send_grid_index(self)
   integer          :: i
   
   allocate(exchange_buffer(size(self%ex_map%exchange_index)))
-  !do i = 1, size(self%exchange_index)
-  !   exchange_buffer(i) = grid_index(self%conv_table(i))
-  !end do
+
   exchange_buffer(:) = 0
 
-  !write(0, *) "recv_send_grid_index , ", trim(self%my_name), self%ex_map%num_of_exchange_rank
-  
   do i = 1, self%ex_map%num_of_exchange_rank
      recv_data_ptr => exchange_buffer(self%ex_map%offset(i)+1)
      data_tag = self%ex_map%exchange_rank(i)*100000+jml_GetMyrank(self%recv_comp_id)
@@ -694,7 +689,7 @@ end subroutine recv_data_2d
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag)
+subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag, factor, offset)
   use jlt_grid, only : get_grid_ptr
   use jlt_utils, only : put_log
   implicit none
@@ -703,6 +698,8 @@ subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag)
   real(kind=8), intent(INOUT) :: recv_data(:,:)
   integer, intent(IN)         :: num_of_layer
   integer, intent(IN)         :: intpl_tag
+  real(kind=8)                :: factor
+  real(kind=8)                :: offset
   integer, pointer            :: send_index(:), recv_index(:)
   integer                     :: send_grid
   integer                     :: recv_grid
@@ -745,7 +742,7 @@ subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag)
            if (send_data(send_grid, n) == missing_value) then
               check_data(recv_grid) = 1
            else
-              recv_data(recv_grid, n) = recv_data(recv_grid, n) + send_data(send_grid, n)*self%coef(i)
+              recv_data(recv_grid, n) = recv_data(recv_grid, n) + send_data(send_grid, n)*self%coef(i)*factor + offset
               weight_data(recv_grid) = weight_data(recv_grid) + self%coef(i)
            end if
         end do
@@ -764,7 +761,7 @@ subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag)
     write(300+self%recv_comp_id*100 + my_grid%get_my_rank(), *) "interpolation"
     do k = 1, num_of_layer
        do i = 1, size(self%coef)
-         recv_data(recv_index(i),k) = recv_data(recv_index(i),k) + send_data(send_index(i),k)*self%coef(i)
+         recv_data(recv_index(i),k) = recv_data(recv_index(i),k) + send_data(send_index(i),k)*self%coef(i)*factor + offset
          write(300+self%recv_comp_id*100 + my_grid%get_my_rank(), *) i, send_index(i), recv_index(i), send_data(send_index(i),k), recv_data(recv_index(i),k), self%coef(i)
       end do
     end do

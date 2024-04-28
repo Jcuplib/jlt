@@ -22,6 +22,8 @@ type data_class
    integer                       :: time_lag               ! exchange time lag (-1, 1, 0)
    integer                       :: exchange_type          ! CONCURRENT_SEND_RECV, ADVANCE_SEND_RECV, BEHIND_SEND_RECV, IMMEDIATE_SEND_RECV
    integer                       :: num_of_layer = 1       !
+   real(kind=8)                  :: offset = 0.d0          ! offset value used in get_data
+   real(kind=8)                  :: factor = 1.d0          ! factor value used in get_data
    integer                       :: grid_intpl_tag         ! grid interpolation tag used in the interpolation subroutine
    integer                       :: exchange_tag           ! MPI data exchange tag
    integer                       :: exchange_data_size     ! size of exchange data 
@@ -65,17 +67,20 @@ contains
 
 function init_data_class(send_data_name, recv_data_name, avr_flag, &
                          intvl, time_lag, exchange_type, num_of_layer, intpl_tag, &
-                         fill_value, exchange_tag) result(my_data_class)
+                         fill_value, exchange_tag, factor, offset) result(my_data_class)
   implicit none
-  character(len=*), intent(IN) :: send_data_name, recv_data_name
-  logical, intent(IN)          :: avr_flag
-  integer, intent(IN)          :: intvl
-  integer, intent(IN)          :: time_lag
-  integer, intent(IN)          :: exchange_type
-  integer, intent(IN)          :: num_of_layer
-  integer, intent(IN)          :: intpl_tag
-  real(kind=8), intent(IN)     :: fill_value
-  integer, intent(IN)          :: exchange_tag
+  character(len=*), intent(IN)       :: send_data_name, recv_data_name
+  logical, intent(IN)                :: avr_flag
+  integer, intent(IN)                :: intvl
+  integer, intent(IN)                :: time_lag
+  integer, intent(IN)                :: exchange_type
+  integer, intent(IN)                :: num_of_layer
+  integer, intent(IN)                :: intpl_tag
+  real(kind=8), intent(IN)           :: fill_value
+  integer, intent(IN)                :: exchange_tag
+  real(kind=8), optional, intent(IN) :: factor
+  real(kind=8), optional, intent(IN) :: offset
+  
   type(data_class) :: my_data_class
 
   my_data_class%send_data_name = trim(send_data_name)
@@ -89,6 +94,14 @@ function init_data_class(send_data_name, recv_data_name, avr_flag, &
   my_data_class%fill_value     = fill_value
   my_data_class%exchange_tag   = exchange_tag
   my_data_class%put_sec        = -1
+
+  if (present(factor)) then
+     my_data_class%factor = factor
+  end if
+  
+  if (present(offset)) then
+     my_data_class%offset = offset
+  end if
   
 end function init_data_class
 
@@ -464,7 +477,8 @@ subroutine interpolate_data_1d(self)
   if (self%my_exchange%is_my_intpl()) then
      allocate(intpl_data(size(self%data1d), 1))
      intpl_data(:,:) = 0.d0     
-     call self%my_exchange%interpolate_data(self%exchange_buffer, intpl_data, 1, self%grid_intpl_tag)
+     call self%my_exchange%interpolate_data(self%exchange_buffer, intpl_data, 1, self%grid_intpl_tag, &
+                                            self%factor, self%offset)
      self%data1d(:) = intpl_data(:,1)
      deallocate(intpl_data)
   end if
@@ -487,7 +501,8 @@ subroutine interpolate_data_2d(self)
   if (self%my_exchange%is_my_intpl()) then
      allocate(intpl_data(size(self%data2d,1), num_of_layer))
      intpl_data(:,:) = 0.d0     
-     call self%my_exchange%interpolate_data(self%exchange_buffer, intpl_data, num_of_layer, self%grid_intpl_tag)
+     call self%my_exchange%interpolate_data(self%exchange_buffer, intpl_data, num_of_layer, self%grid_intpl_tag, &
+                                            self%factor, self%offset)
      self%data2d(:,:) = intpl_data(:,:)
      deallocate(intpl_data)
   end if
@@ -547,7 +562,8 @@ subroutine get_data_2d(self, data, current_sec, is_get_ok)
      
      is_get_ok = .true.
 
-     write(log_str,'("  ",A,F15.5,F15.5)') "[get_data_2d ] get data OK, data_name = "//trim(self%my_name), minval(data(:,1:self%get_num_of_layer())), maxval(data(:,1:self%get_num_of_layer()))
+     write(log_str,'("  ",A,F15.5,F15.5)') "[get_data_2d ] get data OK, data_name = "//trim(self%my_name), &
+                                           minval(data(:,1:self%get_num_of_layer())), maxval(data(:,1:self%get_num_of_layer()))
      call put_log(trim(log_str))
   else
      write(log_str,'("  ",A)') "[get_data_2d ] get data SKIP"

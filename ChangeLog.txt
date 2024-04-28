@@ -49,4 +49,18 @@ Routines
 Detail
  jml_IrecvModel3のexchange_tag設定バグフィックス
 
+-----------------------------------------------------------------
+
+Version:0.020002
+Date:2024/04/28
+
+Files: jlt_remapping.f90
+      jlt_interface.f90, jlt_mpi_lib.f90
+
+Routines
+ get_target_grid_rank        : [mod]
+
+Detail
+ 相手格子のランクを求める際のアルゴリズムバグ修正
+
 

@@ -148,6 +148,7 @@ subroutine get_target_grid_rank(target_comp, target_grid, target_index, target_r
   integer                      :: current_pos
   integer                      :: i, j
 
+
   if (size(target_index) == 0) return
   
   write(file_name, '("jlt.",A,".",A,".GRID_INDEX")') trim(target_comp), trim(target_grid)
@@ -176,15 +177,37 @@ subroutine get_target_grid_rank(target_comp, target_grid, target_index, target_r
   end do
 
   call sort_int_1d(size(target_index), sorted_index, sorted_pos)
-  
+
+  !if (trim(target_comp) == "ILSIO") then
+  !   write(0, *) "get_target_grid_rank, "//trim(target_comp)//", ", chunk_size, file_size, num_of_read, mod_size, size(target_index), target_index(1:10)
+  !end if
+
   current_pos = 1
+
   do i = 1, num_of_read
      read(fid1) index
      read(fid2) rank
+
+     if (index(chunk_size) < sorted_index(current_pos)) cycle
+     
+     !if (trim(target_comp) == "ILSIO") write(0, *) index, "/", rank, "/", current_pos, sorted_index(current_pos),"/"
+
      do j = 1, chunk_size
+        !write(0, '(A,I4, I6,I4)') "current_pos, sorted_index, index = ", current_pos, sorted_index(current_pos), index(j)
+        
         if (sorted_index(current_pos) == index(j)) then
+           !if (trim(target_comp) == "ILSIO") then
+           !   write(0, *) "target_rank = ", i, j, current_pos, index(j), rank(j)
+           !end if
            target_rank(sorted_pos(current_pos)) = rank(j)
            current_pos = current_pos + 1
+           do while(sorted_index(current_pos) == sorted_index(current_pos-1))
+              !if (trim(target_comp) == "ILSIO") then
+              !   write(0, *) "target_rank = ", i, j, current_pos, index(j), rank(j)
+              !end if
+              target_rank(sorted_pos(current_pos)) = rank(j)
+              current_pos = current_pos + 1
+           end do
            if (current_pos > size(target_index)) then
               goto 100
            end if
@@ -200,6 +223,10 @@ subroutine get_target_grid_rank(target_comp, target_grid, target_index, target_r
         if (sorted_index(current_pos) == index(j)) then
            target_rank(sorted_pos(current_pos)) = rank(j)
            current_pos = current_pos + 1
+           do while(sorted_index(current_pos) == sorted_index(current_pos-1)) 
+              target_rank(sorted_pos(current_pos)) = rank(j)
+              current_pos = current_pos + 1
+           end do
            if (current_pos > size(target_index)) then
               goto 100
            end if
@@ -288,6 +315,10 @@ subroutine make_local_mapping_table(global_index, global_target, global_coef, &
   integer                  :: current_pos, counter
   integer                  :: res
   integer                  :: i
+
+  !do i = 1, 10
+  !   write(0, *) "global_mapping ", global_index(i), global_target(i), global_coef(i)
+  !end do
   
   table_size = size(global_index)
 
@@ -304,7 +335,7 @@ subroutine make_local_mapping_table(global_index, global_target, global_coef, &
   allocate(sorted_grid_index(size(grid_index)))
   sorted_grid_index(:) = grid_index(:)
   call sort_int_1d(size(grid_index), sorted_grid_index)
-  
+
   counter = 0
   current_pos = 1
   do i = 1, size(grid_index)
@@ -356,6 +387,10 @@ subroutine make_local_mapping_table(global_index, global_target, global_coef, &
      end if
   end do
 
+  !do i = 1, 10
+  !   write(0, *) "local_mapping ", local_index(i), local_target(i), local_coef(i)
+  !end do
+  
   deallocate(sorted_index)
   deallocate(sorted_pos)
   deallocate(sorted_grid_index)
