@@ -257,6 +257,7 @@ end function get_exchange_tag
 subroutine put_data_1d(self, data, next_sec, delta_t)
   use jlt_constant, only : STR_MID, ADVANCE_SEND_RECV
   use jlt_utils, only : put_log, error
+  use jlt_mpi_lib, only : jml_send_waitall
   implicit none
   class(data_class)           :: self
   real(kind=8), intent(IN)    :: data(:)
@@ -266,6 +267,17 @@ subroutine put_data_1d(self, data, next_sec, delta_t)
   character(len=STR_MID) :: log_str
   integer :: i
 
+  if (self%time_lag == 0) then ! send data now
+     write(log_str,'("  ",A)') "[put_data_1d ] put and send data START , data_name = "//trim(self%my_name)
+     call put_log(trim(log_str))
+     call self%my_exchange%local_2_exchange(data, self%data1d)
+     call self%my_exchange%send_data_1d(self%data1d, self%exchange_buffer, self%grid_intpl_tag, self%exchange_tag)
+     call jml_send_waitall()
+     write(log_str,'("  ",A)') "[put_data_1d ] put and send data END , data_name = "//trim(self%my_name)
+     call put_log(trim(log_str))
+     return
+  end if
+  
   if (self%put_sec == next_sec) then
      call error("put_data_1d", "data ["//trim(self%my_name)//"] double put error") 
   else
@@ -338,6 +350,7 @@ end subroutine put_data_1d
 subroutine put_data_2d(self, data, next_sec, delta_t)
   use jlt_constant, only : STR_MID, ADVANCE_SEND_RECV
   use jlt_utils, only : put_log, error
+  use jlt_mpi_lib, only : jml_send_waitall
   implicit none
   class(data_class)           :: self
   real(kind=8), intent(IN)    :: data(:,:)
@@ -347,6 +360,19 @@ subroutine put_data_2d(self, data, next_sec, delta_t)
   character(len=STR_MID) :: log_str
   integer :: i, k
   
+  if (self%time_lag == 0) then ! send data now
+     write(log_str,'("  ",A)') "[put_data_2d ] put and send data START , data_name = "//trim(self%my_name)
+     call put_log(trim(log_str))
+     do k = 1, self%get_num_of_layer()
+        call self%my_exchange%local_2_exchange(data(:,k), self%data2d(:,k))
+     end do
+     call self%my_exchange%send_data_2d(self%data2d, self%exchange_buffer, self%num_of_layer, self%grid_intpl_tag, self%exchange_tag)
+     call jml_send_waitall()
+     write(log_str,'("  ",A)') "[put_data_2d ] put and send data END , data_name = "//trim(self%my_name)
+     call put_log(trim(log_str))
+     return
+  end if
+
   if (self%put_sec == next_sec) then
      call error("put_data_2d", "data ["//trim(self%my_name)//"] double put error") 
   else
@@ -476,7 +502,6 @@ subroutine interpolate_data_1d(self)
 
   if (self%my_exchange%is_my_intpl()) then
      allocate(intpl_data(size(self%data1d), 1))
-     intpl_data(:,:) = 0.d0     
      call self%my_exchange%interpolate_data(self%exchange_buffer, intpl_data, 1, self%grid_intpl_tag, &
                                             self%factor, self%offset)
      self%data1d(:) = intpl_data(:,1)
@@ -500,7 +525,6 @@ subroutine interpolate_data_2d(self)
 
   if (self%my_exchange%is_my_intpl()) then
      allocate(intpl_data(size(self%data2d,1), num_of_layer))
-     intpl_data(:,:) = 0.d0     
      call self%my_exchange%interpolate_data(self%exchange_buffer, intpl_data, num_of_layer, self%grid_intpl_tag, &
                                             self%factor, self%offset)
      self%data2d(:,:) = intpl_data(:,:)
@@ -514,6 +538,7 @@ end subroutine interpolate_data_2d
 subroutine get_data_1d(self, data, current_sec, is_get_ok)
   use jlt_constant, only : STR_MID
   use jlt_utils, only : put_log
+  use jlt_mpi_lib, only : jml_recv_waitall
   implicit none
   class(data_class) :: self
   real(kind=8), intent(INOUT) :: data(:)
@@ -521,6 +546,22 @@ subroutine get_data_1d(self, data, current_sec, is_get_ok)
   logical, intent(INOUT)      :: is_get_ok
   character(len=STR_MID) :: log_str
 
+  if (self%time_lag == 0) then ! recv data now
+    write(log_str,'("  ",A,I5)') "[get_data_1d] recv and get data START, data_name = "//trim(self%my_name) &
+                                //", exchange_tag = ", self%exchange_tag
+    call put_log(trim(log_str))
+    call self%my_exchange%recv_data_1d(self%exchange_buffer, self%exchange_tag)
+    call jml_recv_waitall()
+
+    call self%interpolate_data_1d()
+    
+    data(:) = self%fill_value  ! set fill value
+    call self%my_exchange%exchange_2_local(self%data1d, data)
+    is_get_ok = .true.
+    write(log_str,'("  ",A)') "[get_data_1d] recv and get data END"
+    call put_log(trim(log_str))
+  end if
+  
   if (mod(current_sec, int(self%intvl, kind=8)) == 0) then
 
      data(:) = self%fill_value  ! set fill value
@@ -544,7 +585,8 @@ end subroutine get_data_1d
 subroutine get_data_2d(self, data, current_sec, is_get_ok)
   use jlt_constant, only : STR_MID
   use jlt_utils, only : put_log
-   implicit none
+  use jlt_mpi_lib, only : jml_recv_waitall
+  implicit none
   class(data_class) :: self
   real(kind=8), intent(INOUT) :: data(:,:)
   integer(kind=8), intent(IN) :: current_sec
@@ -552,9 +594,30 @@ subroutine get_data_2d(self, data, current_sec, is_get_ok)
    character(len=STR_MID) :: log_str
   integer :: k
   
-   if (mod(current_sec, int(self%intvl, kind=8)) == 0) then
+  if (self%time_lag == 0) then ! recv data now
+    write(log_str,'("  ",A,I5)') "[get_data_2d] recv and get data START, data_name = "//trim(self%my_name) &
+                                //", exchange_tag = ", self%exchange_tag
+    call put_log(trim(log_str))
+    call self%my_exchange%recv_data_2d(self%exchange_buffer, self%num_of_layer, self%exchange_tag)
+    call jml_recv_waitall()
 
-     data(:,:) = self%fill_value  ! set fill value
+    call self%interpolate_data_2d()
+    
+    data(:,1:self%get_num_of_layer()) = self%fill_value  ! set fill value
+
+    do k = 1, self%get_num_of_layer()
+       call self%my_exchange%exchange_2_local(self%data2d(:,k), data(:,k))
+    end do
+
+    is_get_ok = .true.
+
+    write(log_str,'("  ",A)') "[get_data_2d] recv and get data END"
+    call put_log(trim(log_str))
+  end if
+
+  if (mod(current_sec, int(self%intvl, kind=8)) == 0) then
+
+     data(:,1:self%get_num_of_layer()) = self%fill_value  ! set fill value
 
      do k = 1, self%get_num_of_layer()
         call self%my_exchange%exchange_2_local(self%data2d(:,k), data(:,k))

@@ -58,9 +58,26 @@ Files: jlt_remapping.f90
       jlt_interface.f90, jlt_mpi_lib.f90
 
 Routines
- get_target_grid_rank        : [mod]
+ get_target_grid_rank       : [mod]
 
 Detail
  相手格子のランクを求める際のアルゴリズムバグ修正
+
+-----------------------------------------------------------------
+
+Version:0.020100
+Date:2024/04/30
+
+Files: jlt_data.f90, jlt_data_class.f90
+
+Routines
+ interpolate_recv_data      : [mod]
+ put_data_1d                : [mod]
+ put_data_2d                : [mod]
+ get_data_1d                : [mod]
+ get_data_2d                : [mod]
+
+Detail
+ time_lag = 0 の即時データ交換に対応
 
 

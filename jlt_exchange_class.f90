@@ -737,7 +737,7 @@ subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag,
         weight_data(:) = 0.d0
         check_data(:) = 0
         do i = 1, size(self%coef)
-           send_grid = send_index(i)
+          send_grid = send_index(i)
            recv_grid = recv_index(i)
            if (send_data(send_grid, n) == missing_value) then
               check_data(recv_grid) = 1
@@ -758,11 +758,11 @@ subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag,
       deallocate(weight_data)
       deallocate(check_data)
   else ! scalar data
-    write(300+self%recv_comp_id*100 + my_grid%get_my_rank(), *) "interpolation"
+    !write(300+self%recv_comp_id*100 + my_grid%get_my_rank(), *) "interpolation"
     do k = 1, num_of_layer
        do i = 1, size(self%coef)
          recv_data(recv_index(i),k) = recv_data(recv_index(i),k) + send_data(send_index(i),k)*self%coef(i)*factor + offset
-         write(300+self%recv_comp_id*100 + my_grid%get_my_rank(), *) i, send_index(i), recv_index(i), send_data(send_index(i),k), recv_data(recv_index(i),k), self%coef(i)
+         !write(300+self%recv_comp_id*100 + my_grid%get_my_rank(), *) i, send_index(i), recv_index(i), send_data(send_index(i),k), recv_data(recv_index(i),k), self%coef(i)
       end do
     end do
  end if

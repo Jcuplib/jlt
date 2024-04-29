@@ -440,6 +440,8 @@ subroutine interpolate_recv_data(data_name, current_sec)
 
   data_ptr => get_recv_data_ptr(data_name)
 
+  if (data_ptr%get_time_lag() == 0) return
+  
   if (mod(current_sec, int(data_ptr%get_intvl(), kind=8)) == 0) then
     if (data_ptr%get_num_of_layer() == 1) then
       call data_ptr%interpolate_data_1d()
