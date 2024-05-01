@@ -4,9 +4,12 @@ module jlt_exchange
   private
 
 !--------------------------------   public   ---------------------------------!
-  public :: init_exchange
-  public :: set_mapping_table
-  public :: get_exchange_ptr
+
+  public :: init_exchange                     ! subroutine ()
+  public :: set_mapping_table                 ! subroutine (my_name, send_comp_name, send_grid_name, recv_comp_name, recv_grid_name,
+                                              !             map_tag, intpl_flag, send_grid, recv_grid, coef)
+  public :: is_exchange_assigned              ! logical function (send_comp_name, send_grid_name, recv_comp_name, recv_grid_name)
+  public :: get_exchange_ptr                  ! type(exchange_type), pointer, function (send_comp_name, send_grid_name, recv_comp_name, recv_grid_name)
   
 !--------------------------------   private  ---------------------------------!
 
@@ -51,6 +54,28 @@ subroutine set_mapping_table(my_name, send_comp_name, send_grid_name, recv_comp_
                                                    map_tag, send_grid, recv_grid, coef)
 
 end subroutine set_mapping_table
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+function is_exchange_assigned(send_comp_name, send_grid_name, &
+                              recv_comp_name, recv_grid_name) result (res)
+  implicit none
+  character(len=*), intent(IN) :: send_comp_name, send_grid_name
+  character(len=*), intent(IN) :: recv_comp_name, recv_grid_name
+  logical :: res
+  integer :: i
+
+  do i = 1, num_of_exchange
+     if (exchange(i)%is_my_exchange(send_comp_name, send_grid_name, &
+                                    recv_comp_name, recv_grid_name)) then
+        res = .true.
+        return
+     end if
+  end do
+
+  res = .false.
+  
+end function is_exchange_assigned
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 

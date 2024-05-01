@@ -24,6 +24,10 @@ public :: set_data                          ! subroutine (send_comp, send_grid, 
 !public :: set_my_data                       ! subroutine ()
 public :: get_num_of_send_data              ! integer function ()
 public :: get_num_of_recv_data              ! integer function ()
+public :: is_my_send_data                   ! logical function (data_num, send_comp_name, send_grid_name, recv_comp_name, recv_grid_name)
+public :: set_my_send_exchange              ! logical function (data_num, send_comp_name, send_grid_name, recv_comp_name, recv_grid_name)
+public :: is_my_recv_data                   ! logical function (data_num, send_comp_name, send_grid_name, recv_comp_name, recv_grid_name)
+public :: set_my_recv_exchange              ! logical function (data_num, send_comp_name, send_grid_name, recv_comp_name, recv_grid_name)
 public :: get_send_data_name                ! character(len=STR_SHORT) function (data_num)
 public :: get_recv_data_name                ! character(len=STR_SHORT) function (data_num)
 public :: get_send_data_intvl               ! integer function (data_num)
@@ -65,7 +69,7 @@ end subroutine init_data
 
 
 subroutine set_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, is_avr, intvl, time_lag, num_of_layer, &
-                         grid_intpl_tag, fill_value, exchange_tag)
+                    grid_intpl_tag, fill_value, exchange_tag)
   use jlt_utils, only : put_log
   use jlt_constant, only : CONCURRENT_SEND_RECV, ADVANCE_SEND_RECV, BEHIND_SEND_RECV, IMMEDIATE_SEND_RECV
   implicit none
@@ -109,6 +113,7 @@ subroutine set_send_data(send_comp, send_grid, send_data_name, recv_comp, recv_g
                          intvl, exchange_type, time_lag, num_of_layer, &
                          grid_intpl_tag, fill_value, exchange_tag)
   use jlt_utils, only : put_log
+  use jlt_exchange, only : is_exchange_assigned
   implicit none
   character(len=*), intent(IN) :: send_comp, send_grid, send_data_name
   character(len=*), intent(IN) :: recv_comp, recv_grid, recv_data_name
@@ -132,11 +137,15 @@ subroutine set_send_data(send_comp, send_grid, send_data_name, recv_comp, recv_g
   
   num_of_send_data = num_of_send_data + 1
 
-  send_data(num_of_send_data) = data_class(send_data_name, recv_data_name, is_avr, &
-                                           intvl, exchange_type, time_lag, num_of_layer, &
+  send_data(num_of_send_data) = data_class(send_comp, send_grid, send_data_name, &
+                                           recv_comp, recv_grid, recv_data_name, &
+                                           is_avr, intvl, exchange_type, time_lag, num_of_layer, &
                                            grid_intpl_tag, fill_value, exchange_tag)
-  call send_data(num_of_send_data)%set_my_exchange(send_comp, send_grid, &
-                                                   recv_comp, recv_grid)
+
+  if (is_exchange_assigned(send_comp, send_grid, recv_comp, recv_grid)) then
+     call send_data(num_of_send_data)%set_my_exchange(send_comp, send_grid, &
+                                                      recv_comp, recv_grid)
+  end if
   
 end subroutine set_send_data
 
@@ -146,6 +155,7 @@ subroutine set_recv_data(send_comp, send_grid, send_data_name, recv_comp, recv_g
                          intvl, exchange_type, time_lag, num_of_layer, &
                          grid_intpl_tag, fill_value, exchange_tag)
   use jlt_utils, only : put_log
+  use jlt_exchange, only : is_exchange_assigned
   implicit none
   character(len=*), intent(IN) :: send_comp, send_grid, send_data_name
   character(len=*), intent(IN) :: recv_comp, recv_grid, recv_data_name
@@ -168,11 +178,15 @@ subroutine set_recv_data(send_comp, send_grid, send_data_name, recv_comp, recv_g
 
   num_of_recv_data = num_of_recv_data + 1
 
-  recv_data(num_of_recv_data) = data_class(send_data_name, recv_data_name, is_avr, &
-                                           intvl, exchange_type, time_lag, num_of_layer, &
+  recv_data(num_of_recv_data) = data_class(send_comp, send_grid, send_data_name, &
+                                           recv_comp, recv_grid, recv_data_name, &
+                                           is_avr, intvl, exchange_type, time_lag, num_of_layer, &
                                            grid_intpl_tag, fill_value, exchange_tag)
-  call recv_data(num_of_recv_data)%set_my_exchange(send_comp, send_grid, &
-                                                   recv_comp, recv_grid)
+
+  if (is_exchange_assigned(send_comp, send_grid, recv_comp, recv_grid)) then
+     call recv_data(num_of_recv_data)%set_my_exchange(send_comp, send_grid, &
+                                                      recv_comp, recv_grid)
+  end if
   
 end subroutine set_recv_data
 
@@ -288,6 +302,79 @@ integer function get_num_of_recv_data()
 
 end function get_num_of_recv_data
 
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+function is_my_send_data(data_num, send_comp, send_grid, recv_comp, recv_grid) result(res)
+  implicit none
+  integer, intent(IN)          :: data_num
+  character(len=*), intent(IN) :: send_comp
+  character(len=*), intent(IN) :: send_grid
+  character(len=*), intent(IN) :: recv_comp
+  character(len=*), intent(IN) :: recv_grid
+  logical :: res
+
+  if ((trim(send_data(data_num)%get_send_comp_name()) == trim(send_comp)) .and. &
+      (trim(send_data(data_num)%get_send_grid_name()) == trim(send_grid)) .and. &
+      (trim(send_data(data_num)%get_recv_comp_name()) == trim(recv_comp)) .and. &
+      (trim(send_data(data_num)%get_recv_grid_name()) == trim(recv_grid))) then
+    res = .true.
+  else
+    res = .false.
+  end if
+       
+end function is_my_send_data
+  
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+subroutine set_my_send_exchange(data_num, send_comp, send_grid, recv_comp, recv_grid) 
+  implicit none
+  integer, intent(IN)          :: data_num
+  character(len=*), intent(IN) :: send_comp
+  character(len=*), intent(IN) :: send_grid
+  character(len=*), intent(IN) :: recv_comp
+  character(len=*), intent(IN) :: recv_grid
+  
+  call send_data(data_num)%set_my_exchange(send_comp, send_grid, &
+                                           recv_comp, recv_grid)
+end subroutine set_my_send_exchange
+   
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+function is_my_recv_data(data_num, send_comp, send_grid, recv_comp, recv_grid) result(res)
+  implicit none
+  integer, intent(IN)          :: data_num
+  character(len=*), intent(IN) :: send_comp
+  character(len=*), intent(IN) :: send_grid
+  character(len=*), intent(IN) :: recv_comp
+  character(len=*), intent(IN) :: recv_grid
+  logical :: res
+
+  if ((trim(recv_data(data_num)%get_send_comp_name()) == trim(send_comp)) .and. &
+      (trim(recv_data(data_num)%get_send_grid_name()) == trim(send_grid)) .and. &
+      (trim(recv_data(data_num)%get_recv_comp_name()) == trim(recv_comp)) .and. &
+      (trim(recv_data(data_num)%get_recv_grid_name()) == trim(recv_grid))) then
+    res = .true.
+  else
+    res = .false.
+  end if
+       
+end function is_my_recv_data
+  
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+subroutine set_my_recv_exchange(data_num, send_comp, send_grid, recv_comp, recv_grid) 
+  implicit none
+  integer, intent(IN)          :: data_num
+  character(len=*), intent(IN) :: send_comp
+  character(len=*), intent(IN) :: send_grid
+  character(len=*), intent(IN) :: recv_comp
+  character(len=*), intent(IN) :: recv_grid
+  
+  call recv_data(data_num)%set_my_exchange(send_comp, send_grid, &
+                                           recv_comp, recv_grid)
+end subroutine set_my_recv_exchange
+   
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
 character(len=STR_SHORT) function get_send_data_name(data_num)
@@ -462,6 +549,7 @@ subroutine get_data_1d(data_name, data, current_sec, is_get_ok)
   logical, intent(INOUT)       :: is_get_ok
   type(data_class), pointer :: data_ptr
 
+  
   data_ptr => get_recv_data_ptr(data_name)
 
   if (data_ptr%get_num_of_layer() > 1) then

@@ -443,6 +443,8 @@ subroutine jlt_set_mapping_table(my_model_name, &
   use jlt_utils, only : put_log, IntToStr, error
   use jlt_comp, only : get_comp_id_from_name,is_my_component
   use jlt_exchange, only : set_mapping_table
+  use jlt_data, only : get_num_of_send_data, is_my_send_data, set_my_send_exchange, &
+                       get_num_of_recv_data, is_my_recv_data, set_my_recv_exchange
   implicit none
   character(len=*), intent(IN)  :: my_model_name
   character(len=*), intent(IN)  :: send_model_name, send_grid_name
@@ -452,8 +454,8 @@ subroutine jlt_set_mapping_table(my_model_name, &
   real(kind=8), intent(IN)      :: coef(:)
   logical :: is_my_intpl  
   integer :: my_model_id, send_model_id, recv_model_id
-
-  call put_log("------------------------------------------------------------------------------------------")
+  integer :: i
+  
   call put_log("------------------------------------------------------------------------------------------")
   call put_log("set mapping table start : "//trim(send_model_name)//":"//trim(recv_model_name) &
               //", grid = "//trim(send_grid_name)//":"//trim(recv_grid_name),1)
@@ -475,7 +477,19 @@ subroutine jlt_set_mapping_table(my_model_name, &
                                               
   call put_log("set mapping table end : "//trim(send_model_name)//":"//trim(recv_model_name),1)
 
-  call put_log("------------------------------------------------------------------------------------------")
+  do i = 1, get_num_of_send_data()
+     if (is_my_send_data(i, send_model_name, send_grid_name, recv_model_name, recv_grid_name)) then
+        call set_my_send_exchange(i, send_model_name, send_grid_name, recv_model_name, recv_grid_name)
+     end if
+  end do
+  
+  do i = 1, get_num_of_recv_data()
+     if (is_my_recv_data(i, send_model_name, send_grid_name, recv_model_name, recv_grid_name)) then
+        call set_my_recv_exchange(i, send_model_name, send_grid_name, recv_model_name, recv_grid_name)
+     end if
+  end do
+  
+  
   call put_log("------------------------------------------------------------------------------------------")
 
   return

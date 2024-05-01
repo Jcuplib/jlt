@@ -14,7 +14,11 @@ public :: data_class
 type data_class
    private
    character(len=STR_SHORT)      :: my_name
+   character(len=STR_SHORT)      :: send_comp_name
+   character(len=STR_SHORT)      :: send_grid_name
    character(len=STR_SHORT)      :: send_data_name
+   character(len=STR_SHORT)      :: recv_comp_name
+   character(len=STR_SHORT)      :: recv_grid_name
    character(len=STR_SHORT)      :: recv_data_name
    type(exchange_class), pointer :: my_exchange
    logical                       :: avr_flag               ! average data or not
@@ -38,7 +42,11 @@ type data_class
    procedure :: set_my_exchange     ! subroutine (send_comp, send_grid, recv_comp, recv_grid)
    procedure :: get_my_exchange     ! type(exchange_class), pointer function ()
    procedure :: get_my_name         ! character(len=STR_SHORT) function ()
+   procedure :: get_send_comp_name  ! character(len=STR_SHORT) function ()
+   procedure :: get_send_grid_name  ! character(len=STR_SHORT) function ()
    procedure :: get_send_data_name  ! character(len=STR_SHORT) function ()
+   procedure :: get_recv_comp_name  ! character(len=STR_SHORT) function ()
+   procedure :: get_recv_grid_name  ! character(len=STR_SHORT) function ()
    procedure :: get_recv_data_name  ! character(len=STR_SHORT) function ()
    procedure :: is_avr              ! logical function ()
    procedure :: get_intvl           ! integer function ()
@@ -65,11 +73,17 @@ contains
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-function init_data_class(send_data_name, recv_data_name, avr_flag, &
-                         intvl, time_lag, exchange_type, num_of_layer, intpl_tag, &
-                         fill_value, exchange_tag, factor, offset) result(my_data_class)
+  function init_data_class(send_comp_name, send_grid_name, send_data_name, &
+                           recv_comp_name, recv_grid_name, recv_data_name, &
+                           avr_flag, intvl, time_lag, exchange_type, num_of_layer, intpl_tag, &
+                           fill_value, exchange_tag, factor, offset) result(my_data_class)
   implicit none
-  character(len=*), intent(IN)       :: send_data_name, recv_data_name
+  character(len=*), intent(IN)       :: send_comp_name
+  character(len=*), intent(IN)       :: send_grid_name
+  character(len=*), intent(IN)       :: send_data_name
+  character(len=*), intent(IN)       :: recv_comp_name
+  character(len=*), intent(IN)       :: recv_grid_name
+  character(len=*), intent(IN)       :: recv_data_name
   logical, intent(IN)                :: avr_flag
   integer, intent(IN)                :: intvl
   integer, intent(IN)                :: time_lag
@@ -83,7 +97,11 @@ function init_data_class(send_data_name, recv_data_name, avr_flag, &
   
   type(data_class) :: my_data_class
 
+  my_data_class%send_comp_name = trim(send_comp_name)
+  my_data_class%send_grid_name = trim(send_grid_name)
   my_data_class%send_data_name = trim(send_data_name)
+  my_data_class%recv_comp_name = trim(recv_comp_name)
+  my_data_class%recv_grid_name = trim(recv_grid_name)
   my_data_class%recv_data_name = trim(recv_data_name)
   my_data_class%avr_flag       = avr_flag
   my_data_class%intvl          = intvl
@@ -174,13 +192,53 @@ end function get_my_name
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
+character(len=STR_SHORT) function get_send_comp_name(self)
+  implicit none
+  class(data_class) :: self
+
+  get_send_comp_name = trim(self%send_comp_name)
+
+end function get_send_comp_name
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+character(len=STR_SHORT) function get_send_grid_name(self)
+  implicit none
+  class(data_class) :: self
+
+  get_send_grid_name = trim(self%send_grid_name)
+
+end function get_send_grid_name
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
 character(len=STR_SHORT) function get_send_data_name(self)
   implicit none
   class(data_class) :: self
 
-  get_send_data_name = self%send_data_name
+  get_send_data_name = trim(self%send_data_name)
 
 end function get_send_data_name
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+character(len=STR_SHORT) function get_recv_comp_name(self)
+  implicit none
+  class(data_class) :: self
+
+  get_recv_comp_name = trim(self%recv_comp_name)
+
+end function get_recv_comp_name
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+character(len=STR_SHORT) function get_recv_grid_name(self)
+  implicit none
+  class(data_class) :: self
+
+  get_recv_grid_name = trim(self%recv_grid_name)
+
+end function get_recv_grid_name
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
@@ -188,7 +246,7 @@ character(len=STR_SHORT) function get_recv_data_name(self)
   implicit none
   class(data_class) :: self
 
-  get_recv_data_name = self%recv_data_name
+  get_recv_data_name = trim(self%recv_data_name)
 
 end function get_recv_data_name
 

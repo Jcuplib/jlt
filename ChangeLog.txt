@@ -80,4 +80,28 @@ Routines
 Detail
  time_lag = 0 の即時データ交換に対応
 
+-----------------------------------------------------------------
+
+Version:0.020200
+Date:2024/05/01
+
+Files: jlt_interface.f90, jlt_exchange.f90, jlt_data.f90, jlt_data_class.f90
+
+Routines
+ get_send_comp_name         : [add]
+ get_send_grid_name         : [add]
+ get_recv_comp_name         : [add]
+ get_recv_grid_name         : [add]
+ set_send_data              : [mod]
+ set_recv_data              : [mod]
+ is_exchange_assigned       : [add]
+ is_my_send_data            : [add]
+ is_my_recv_data            : [add]
+ set_my_send_exchange       : [add]
+ set_my_recv_exchange       : [add]
+ ils_set_mapping_table      : [mod]
+
+Detail
+ time_lag = 0 の即時データ交換に対応
+
 
