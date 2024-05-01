@@ -102,6 +102,7 @@ Routines
  ils_set_mapping_table      : [mod]
 
 Detail
- time_lag = 0 の即時データ交換に対応
+ jlt_set_dataとjlt_set_mapping_tableの呼び出し順序によらずdata_classに対してmy_exchangeを
+ 設定するように修正
 
 
