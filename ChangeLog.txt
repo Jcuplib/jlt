@@ -105,4 +105,30 @@ Detail
  jlt_set_dataとjlt_set_mapping_tableの呼び出し順序によらずdata_classに対してmy_exchangeを
  設定するように修正
 
+-----------------------------------------------------------------
+
+Version:0.020201
+Date:2024/05/30
+
+Files: jlt_remapping.f90
+
+Routines
+ get_target_grid_rank       : [mod]
+
+Detail
+ sorted_indexのcurrent_posの値に関するバグフィックス
+
+-----------------------------------------------------------------
+
+Version:0.020300
+Date:2024/05/30
+
+Files: jlt_data_class.f90
+
+Routines
+ recv_data_1d               : [mod]
+ recv_data_2d               : [mod]
+
+Detail
+ time_lag == 0のときにルーチンを抜けるように修正。time_lag == 0のときはget_dataで受信する。
 

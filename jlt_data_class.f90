@@ -518,6 +518,8 @@ subroutine recv_data_1d(self, current_sec)
   integer(kind=8), intent(IN) :: current_sec
   character(len=STR_MID) :: log_str
 
+  if (self%time_lag == 0) return
+  
   if (mod(current_sec, int(self%intvl, kind=8)) == 0) then
     write(log_str,'("  ",A,I5)') "[recv_data_1d] recv data START, data_name = "//trim(self%my_name) &
                                 //", exchange_tag = ", self%exchange_tag
@@ -539,6 +541,8 @@ subroutine recv_data_2d(self, current_sec)
   integer(kind=8), intent(IN) :: current_sec
   character(len=STR_MID) :: log_str
   
+  if (self%time_lag == 0) return ! when time_lag == 0
+
   if (mod(current_sec, int(self%intvl, kind=8)) == 0) then
     write(log_str,'("  ",A,I5)') "[recv_data_2d] recv data, data_name = "//trim(self%my_name) &
                                 //", exchange_tag = ", self%exchange_tag
