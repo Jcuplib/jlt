@@ -201,12 +201,14 @@ subroutine get_target_grid_rank(target_comp, target_grid, target_index, target_r
            !end if
            target_rank(sorted_pos(current_pos)) = rank(j)
            current_pos = current_pos + 1
+           if (size(sorted_index) < current_pos) goto 100
            do while(sorted_index(current_pos) == sorted_index(current_pos-1))
               !if (trim(target_comp) == "ILSIO") then
               !   write(0, *) "target_rank = ", i, j, current_pos, index(j), rank(j)
               !end if
               target_rank(sorted_pos(current_pos)) = rank(j)
               current_pos = current_pos + 1
+              if (size(sorted_index) < current_pos) goto 100
            end do
            if (current_pos > size(target_index)) then
               goto 100
@@ -223,9 +225,11 @@ subroutine get_target_grid_rank(target_comp, target_grid, target_index, target_r
         if (sorted_index(current_pos) == index(j)) then
            target_rank(sorted_pos(current_pos)) = rank(j)
            current_pos = current_pos + 1
+           if (size(sorted_index) < current_pos) goto 100
            do while(sorted_index(current_pos) == sorted_index(current_pos-1)) 
               target_rank(sorted_pos(current_pos)) = rank(j)
               current_pos = current_pos + 1
+              if (size(sorted_index) < current_pos) goto 100
            end do
            if (current_pos > size(target_index)) then
               goto 100
