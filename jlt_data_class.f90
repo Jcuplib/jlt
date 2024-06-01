@@ -36,6 +36,7 @@ type data_class
    real(kind=8), pointer         :: data1d(:)              ! exchange  data buffer, size = exchange_data_size
    real(kind=8), pointer         :: data1d_tmp(:)          ! averaging data buffer, size = exchange_data_size
    real(kind=8), pointer         :: data2d(:,:)            ! exchange  data buffer, size = (exchange_array_size, num_of_layer)
+   real(kind=8), pointer         :: weight2d(:,:)          ! avaraging weight (exchange_array_size, num_of_layer)
    real(kind=8), pointer         :: exchange_buffer(:,:)   ! received data buffer of exchange data
    integer(kind=8)               :: put_sec                ! time of put data
  contains
@@ -157,8 +158,10 @@ subroutine set_my_exchange(self, send_comp_name, send_grid_name, &
   
   if (self%is_avr()) then
      allocate(self%data1d_tmp(self%exchange_data_size))
+     allocate(self%weight2d(self%exchange_data_size, self%num_of_layer))
   else
      allocate(self%data1d_tmp(1))
+     allocate(self%weight2d(1, 1))
   end if
    
   if (self%num_of_layer == 1) then
@@ -356,12 +359,16 @@ subroutine put_data_1d(self, data, next_sec, delta_t)
         if (delta_t == 0) then ! first step
            weight = 1.d0
            self%data1d(:) = 0.d0 ! initialize data1d 
+           self%weight2d(:,:) = 0.d0
         else
-           weight = dble(delta_t)/dble(self%intvl)
+           weight = dble(delta_t)   !!!/dble(self%intvl)
         end if
        
         do i = 1, self%exchange_data_size
-           self%data1d(i) = self%data1d(i) + self%data1d_tmp(i)*weight
+           if (self%data1d_tmp(i) /= self%fill_value) then
+              self%data1d(i) = self%data1d(i) + self%data1d_tmp(i)*weight
+              self%weight2d(i, 1) = self%weight2d(i, 1) + weight
+           end if
         end do
 
         write(log_str,'("  ",A,F8.5)') "[put_data_1d ] average data, data_name = "//trim(self%my_name)//", weight = ",weight
@@ -376,8 +383,14 @@ subroutine put_data_1d(self, data, next_sec, delta_t)
         end if
         
         if (mod(next_sec, int(self%intvl, kind=8)) == 0) then ! send step
+           do i = 1, self%exchange_data_size
+              if (self%weight2d(i, 1) /= 0) then
+                 self%data1d(i) = self%data1d(i) / self%weight2d(i, 1)
+              end if
+           end do
            call self%my_exchange%send_data_1d(self%data1d, self%exchange_buffer, self%grid_intpl_tag, self%exchange_tag)
            self%data1d(:) = 0.d0 ! reset average data
+           self%weight2d(:,:) = 0.d0
         end if
 
      else ! snapshot data
@@ -450,18 +463,24 @@ subroutine put_data_2d(self, data, next_sec, delta_t)
 
   else
      if (self%is_avr()) then ! average data
-
+        
         if (delta_t == 0) then ! first step
            weight = 1.d0
            self%data2d(:,:) = 0.d0 ! initialize data2d
+           self%weight2d(:,:) = 0.d0 ! 
         else
-           weight = dble(delta_t)/dble(self%intvl)
+           weight = dble(delta_t)   !!!! /dble(self%intvl)
         end if
        
         do k = 1, self%get_num_of_layer()
 
+          call self%my_exchange%local_2_exchange(data(:,k), self%data1d_tmp)
+           
           do i = 1, self%exchange_data_size
-             self%data2d(i,k) = self%data2d(i,k) + self%data1d_tmp(i)*weight
+             if (self%data1d_tmp(i) /= self%fill_value) then
+                self%data2d(i,k) = self%data2d(i,k) + self%data1d_tmp(i)*weight
+                self%weight2d(i, k) = self%weight2d(i, k) + weight
+             end if
           end do
 
        end do
@@ -478,8 +497,16 @@ subroutine put_data_2d(self, data, next_sec, delta_t)
         end if
         
         if (mod(next_sec, int(self%intvl, kind=8)) == 0) then ! send step
+           do k = 1, self%get_num_of_layer()
+              do i = 1, self%exchange_data_size
+                 if (self%weight2d(i, k) /= 0) then
+                    self%data2d(i, k) = self%data2d(i, k) / self%weight2d(i, k)
+                 end if
+              end do
+           end do   
            call self%my_exchange%send_data_2d(self%data2d, self%exchange_buffer, self%num_of_layer, self%grid_intpl_tag, self%exchange_tag)
            self%data2d(:,:) = 0.d0 ! reset average data
+           self%weight2d(:,:) = 0.d0 ! reset average weight
         end if
 
      else ! snapshot data

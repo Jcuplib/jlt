@@ -41,7 +41,7 @@ public :: get_data_2d                       ! subroutine (data_name, data)
 
 !--------------------------------   private  ---------------------------------!
 
-integer, parameter :: MAX_DATA = 40
+integer, parameter :: MAX_DATA = 140
 
 integer :: num_of_send_data = 0
 type(data_class), pointer :: send_data(:)

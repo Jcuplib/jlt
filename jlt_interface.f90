@@ -704,6 +704,8 @@ subroutine jlt_put_data_25d(data_name, data, data_vector)
   write(log_str,'("  ",A)') "[jlt_put_data_25d ] put data START , data_name = "//trim(data_name)
   call put_log(trim(log_str))
 
+  write(0, *) "jlt_put_data_25d ", trim(data_name), ", ", minval(data), maxval(data)
+  
   call put_data_2d(data_name, data, next_sec, current_delta_t)
 
   write(log_str,'("  ",A)') "[jlt_put_data_25d ] put data END , data_name = "//trim(data_name)

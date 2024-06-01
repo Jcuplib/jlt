@@ -132,3 +132,17 @@ Routines
 Detail
  time_lag == 0のときにルーチンを抜けるように修正。time_lag == 0のときはget_dataで受信する。
 
+-----------------------------------------------------------------
+
+Version:0.020400
+Date:2024/05/30
+
+Files: jlt_data_class.f90
+
+Routines
+ put_data_1d                : [mod]
+ put_data_2d                : [mod]
+
+Detail
+ 時間平均の計算をfill_valueの格子が時間変化する場合を考慮したアルゴリズに変更。
+

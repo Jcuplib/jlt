@@ -545,7 +545,7 @@ subroutine send_data_2d(self, data, exchange_buffer, num_of_layer, intpl_tag, ex
   end if
 
   allocate(ptr_array(num_of_layer))
-  
+
     do k = 1, num_of_layer
        if (self%is_my_intpl()) then
        else
@@ -558,7 +558,7 @@ subroutine send_data_2d(self, data, exchange_buffer, num_of_layer, intpl_tag, ex
          target_rank = self%ex_map%exchange_rank(i)
          num_of_data = self%ex_map%num_of_exchange(i)
          offset      = self%ex_map%offset(i)
-         ptr_array(k)%data_ptr    => exchange_buffer(offset + 1, k)
+         !!!ptr_array(k)%data_ptr    => exchange_buffer(offset + 1, k)
 
          if (get_log_level() == DETAIL_LOG) then
             write(log_str,'("  ",A,I8,A,I10, A, F15.5, F15.5)') "[send_data_2d] target_rank = ", target_rank, ", num_of_data = ", num_of_data, &
@@ -568,8 +568,9 @@ subroutine send_data_2d(self, data, exchange_buffer, num_of_layer, intpl_tag, ex
          end if
          call jml_ISendModel3(self%send_comp_id, exchange_buffer(offset+1:offset+num_of_data, 1:num_of_layer), 1, num_of_data, 1, num_of_layer, &
                               self%recv_comp_id, target_rank, exchange_tag)
-         !call jml_ISendModel2(self%send_comp_id, ptr_array(k)%data_ptr, 1, num_of_data, 1, 1, &
-         !                    self%recv_comp_id, target_rank, exchange_tag)
+         !!!call jml_ISendModel2(self%send_comp_id, ptr_array(k)%data_ptr, 1, num_of_data, 1, 1, &
+         !!!                    self%recv_comp_id, target_rank, exchange_tag)
+    !!!end do
     end do
 
     write(log_str,'("  ",A,I5)') "[send_data_2d] send data END, exchange_tag = ", exchange_tag
@@ -642,7 +643,7 @@ subroutine recv_data_2d(self, exchange_buffer, num_of_layer, exchange_tag)
      real(kind=8), pointer    :: data_ptr
   end type data_ptr_type
   type (data_ptr_type), allocatable  :: ptr_array(:) 
-  integer :: i
+  integer :: i, k
   
   write(log_str,'("  ",A,I5)') "[recv_data_2d] recv data START, exchange_tag = ", exchange_tag
   call put_log(trim(log_str))
@@ -660,7 +661,8 @@ subroutine recv_data_2d(self, exchange_buffer, num_of_layer, exchange_tag)
        target_rank = self%ex_map%exchange_rank(i)
        num_of_data = self%ex_map%num_of_exchange(i)
        offset      = self%ex_map%offset(i)
-       !ptr_array(k)%data_ptr    => exchange_buffer(offset+1, k)
+       !!!do k = 1, num_of_layer
+       !!!ptr_array(k)%data_ptr    => exchange_buffer(offset+1, k)
 
        if (get_log_level() == DETAIL_LOG) then
           write(log_str,'("  ",A,I8,A,I10)') "[recv_data_2d] target_rank = ", target_rank, ", num_of_data = ", num_of_data
@@ -669,9 +671,9 @@ subroutine recv_data_2d(self, exchange_buffer, num_of_layer, exchange_tag)
 
        call jml_IrecvModel3(self%recv_comp_id, exchange_buffer(offset+1:offset+num_of_data, 1:num_of_layer), 1, num_of_data, 1, num_of_layer,  &
                             self%send_comp_id, target_rank, exchange_tag)
-       !call jml_IrecvModel2(self%recv_comp_id, ptr_array(k)%data_ptr, 1, num_of_data, 1,1,  &
-       !                     self%send_comp_id, target_rank, exchange_tag)
-
+       !!!call jml_IrecvModel2(self%recv_comp_id, ptr_array(k)%data_ptr, 1, num_of_data, 1,1,  &
+       !!!                     self%send_comp_id, target_rank, exchange_tag)
+       !!!end do
   end do
 
   deallocate(ptr_array)
