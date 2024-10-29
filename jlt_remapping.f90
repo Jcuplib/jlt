@@ -6,6 +6,8 @@ module jlt_remapping
 
 public :: init_remapping                   ! subroutine (local_comm)
 public :: make_grid_rank_file              ! subroutine (my_comp, my_grid, grid_index)
+public :: make_local_mapping_table_no_sort ! subroutine (my_index_global, target_index_global, coef_global,
+                                           !             grid_index, my_index_local, target_index_local, coef_local) 
 public :: make_local_mapping_table         ! subroutine (my_index_global, target_index_global, coef_global,
                                            !             grid_index, my_index_local, target_index_local, coef_local) 
 public :: get_target_grid_rank             ! subroutine (target_comp, target_grid, target_index, target_rank)
@@ -299,6 +301,195 @@ subroutine make_grid_index_file(my_name, my_grid, my_rank, grid_index)
   deallocate(sorted_pos)
   
 end subroutine make_grid_index_file
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+subroutine make_local_mapping_table_no_sort(global_index, global_target, global_coef, &
+                                           grid_index, &
+                                           local_size, local_index,  local_target,  local_coef)
+  use jlt_utils, only : sort_int_1d, binary_search, error
+  use jlt_mpi_lib, only : jml_GetMyrankGlobal
+  implicit none
+  integer, intent(IN)      :: global_index(:), global_target(:)
+  real(kind=8), intent(IN) :: global_coef(:)
+  integer, intent(IN)      :: grid_index(:)
+  integer, intent(OUT)     :: local_size
+  integer, pointer         :: local_index(:), local_target(:)
+  real(kind=8), pointer    :: local_coef(:)
+  integer, pointer         :: sorted_index(:), sorted_pos(:)
+  integer, pointer         :: sorted_target(:)
+  real(kind=8), pointer    :: sorted_coef(:)
+  integer, pointer         :: sorted_grid_index(:)
+  integer                  :: table_size
+  integer                  :: current_pos, counter
+  integer                  :: res
+  integer                  :: i
+
+  do i = 1, size(global_index)
+     write(100+jml_GetMyrankGlobal(), *) "global_mapping ", global_index(i), global_target(i), global_coef(i)
+  end do
+  
+  do i = 1, size(grid_index)
+     write(100+jml_GetMyrankGlobal(), *) "grid_index ", grid_index(i)
+  end do
+
+  table_size = size(grid_index)
+
+  allocate(sorted_index(table_size)) 
+  
+  do i = 1, table_size
+     sorted_index(i) = grid_index(i)
+  end do
+
+  call sort_int_1d(table_size, sorted_index)
+
+  counter = 0
+  do i = 1, size(global_index)
+     res = binary_search(sorted_index, global_index(i))
+     if (res > 0) counter = counter + 1
+  end do
+
+  local_size = counter
+  
+  allocate(local_index(local_size))
+  allocate(local_target(local_size))
+  allocate(local_coef(local_size))
+
+  counter = 0
+
+  do i = 1, size(global_index)
+     res = binary_search(sorted_index, global_index(i))
+     if (res > 0) then
+        counter = counter + 1
+        local_index(counter) = global_index(i)
+        local_target(counter) = global_target(i)
+        local_coef(counter)  = global_coef(i)
+     end if
+  end do
+     
+  do i = 1, size(local_index)
+     write(100+jml_GetMyrankGlobal(), *) "local_mapping ", local_index(i), local_target(i), local_coef(i)
+  end do
+
+  deallocate(sorted_index)
+  
+end subroutine make_local_mapping_table_no_sort
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+subroutine make_local_mapping_table_no_sort_org(global_index, global_target, global_coef, &
+                                    grid_index, &
+                                    local_size, local_index,  local_target,  local_coef)
+  use jlt_utils, only : sort_int_1d, binary_search, error
+  use jlt_mpi_lib, only : jml_GetMyrankGlobal
+  implicit none
+  integer, intent(IN)      :: global_index(:), global_target(:)
+  real(kind=8), intent(IN) :: global_coef(:)
+  integer, intent(IN)      :: grid_index(:)
+  integer, intent(OUT)     :: local_size
+  integer, pointer         :: local_index(:), local_target(:)
+  real(kind=8), pointer    :: local_coef(:)
+  integer, pointer         :: sorted_index(:), sorted_pos(:)
+  integer, pointer         :: sorted_target(:)
+  real(kind=8), pointer    :: sorted_coef(:)
+  integer, pointer         :: sorted_grid_index(:)
+  integer                  :: table_size
+  integer                  :: current_pos, counter
+  integer                  :: res
+  integer                  :: i
+
+  do i = 1, size(global_index)
+     write(100+jml_GetMyrankGlobal(), *) "global_mapping ", global_index(i), global_target(i), global_coef(i)
+  end do
+  
+  do i = 1, size(grid_index)
+     write(100+jml_GetMyrankGlobal(), *) "grid_index ", grid_index(i)
+  end do
+  
+  table_size = size(global_index)
+
+  allocate(sorted_index(table_size))
+  allocate(sorted_pos(table_size))
+  allocate(sorted_target(table_size))
+  allocate(sorted_coef(table_size))
+  
+  do i = 1, table_size
+     sorted_index(i) = global_index(i)
+     sorted_pos(i)   = i
+  end do
+
+  call sort_int_1d(table_size, sorted_index, sorted_pos)
+
+  do i = 1, table_size
+     sorted_target(i) = global_target(sorted_pos(i))
+     sorted_coef(i)   = global_coef(sorted_pos(i))
+  end do
+  
+  allocate(sorted_grid_index(size(grid_index)))
+  sorted_grid_index(:) = grid_index(:)
+  call sort_int_1d(size(grid_index), sorted_grid_index)
+
+  counter = 0
+  current_pos = 1
+  do i = 1, size(grid_index)
+     if (current_pos > size(sorted_index)) exit
+     do while (sorted_index(current_pos) <= sorted_grid_index(i))
+        if (sorted_index(current_pos) == sorted_grid_index(i)) counter = counter + 1
+        current_pos = current_pos + 1
+        if (current_pos > size(sorted_index)) exit
+     end do
+  end do
+
+  local_size = counter
+
+  if (local_size == 0) then ! no local mapping table
+     allocate(local_index(0))
+     allocate(local_target(0))
+     allocate(local_coef(0))
+     deallocate(sorted_index)
+     deallocate(sorted_pos)
+     deallocate(sorted_grid_index)
+     return
+  end if
+  
+  allocate(local_index(local_size))
+  allocate(local_target(local_size))
+  allocate(local_coef(local_size))
+
+  counter = 0
+  current_pos = 1
+  do i = 1, size(grid_index)
+     if (current_pos > size(sorted_index)) exit
+     do while (sorted_index(current_pos) <= sorted_grid_index(i))
+        if (sorted_index(current_pos) == sorted_grid_index(i)) then
+           counter = counter + 1
+           local_index(counter)  = sorted_index(sorted_pos(current_pos))
+           local_target(counter) = sorted_target(sorted_pos(current_pos))
+           local_coef(counter)   = sorted_coef(sorted_pos(current_pos))
+        end if
+        current_pos = current_pos + 1
+        if (current_pos > size(sorted_index)) exit
+     end do
+  end do
+
+  do i = 1, size(local_index)
+     write(100+jml_GetMyrankGlobal(), *) "local_mapping ", local_index(i), local_target(i), local_coef(i)
+  end do
+  
+
+  do i = 1, size(local_index)
+     res = binary_search(sorted_grid_index, local_index(i))
+     if (res <= 0) then
+        write(0, *) "grid_index = ", i, local_index(i), sorted_grid_index
+        call error("jlt_remapping:make_local_mapping_table", "grid index not listed in mapping table")
+     end if
+  end do
+
+  deallocate(sorted_index)
+  deallocate(sorted_pos)
+  deallocate(sorted_grid_index)
+  
+end subroutine make_local_mapping_table_no_sort_org
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 

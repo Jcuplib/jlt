@@ -146,3 +146,17 @@ Routines
 Detail
  時間平均の計算をfill_valueの格子が時間変化する場合を考慮したアルゴリズに変更。
 
+-----------------------------------------------------------------
+
+Version:0.020500
+Date:2024/08/02
+
+Files: jlt_data_class.f90, jlt_exchange_class.f90
+
+Routines
+ send_data_2d               : [mod]
+ recv_data_2d               : [mod]
+ 
+Detail
+ ２次元データの送受信に汎用バッファではなくデータ毎のバッファを使うよう変更。
+

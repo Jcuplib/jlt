@@ -1,6 +1,6 @@
 module jlt_data_class
   use jlt_constant, only : STR_SHORT
-  use jlt_exchange_class, only : exchange_class
+  use jlt_exchange_class, only : buffer_class, exchange_class
   implicit none
   private
   
@@ -9,7 +9,6 @@ module jlt_data_class
 public :: data_class
 
 !--------------------------------   private  ---------------------------------!
-
 
 type data_class
    private
@@ -39,6 +38,8 @@ type data_class
    real(kind=8), pointer         :: weight2d(:,:)          ! avaraging weight (exchange_array_size, num_of_layer)
    real(kind=8), pointer         :: exchange_buffer(:,:)   ! received data buffer of exchange data
    integer(kind=8)               :: put_sec                ! time of put data
+   integer                       :: num_of_target          ! number of exchange target process
+   type(buffer_class), pointer   :: exchange_target(:)     ! array of exchange data buffer
  contains
    procedure :: set_my_exchange     ! subroutine (send_comp, send_grid, recv_comp, recv_grid)
    procedure :: get_my_exchange     ! type(exchange_class), pointer function ()
@@ -63,6 +64,7 @@ type data_class
    procedure :: recv_data_2d        ! subroutine ()
    procedure :: interpolate_data_2d ! subroutine ()
    procedure :: get_data_2d         ! subroutine (data)
+   procedure :: is_my_intpl         ! logical function ()
 end type data_class
 
 interface data_class
@@ -134,6 +136,7 @@ subroutine set_my_exchange(self, send_comp_name, send_grid_name, &
   character(len=*), intent(IN) :: send_comp_name, send_grid_name
   character(len=*), intent(IN) :: recv_comp_name, recv_grid_name
   integer :: global_exchange_size
+  integer :: i
   
   self%my_exchange => get_exchange_ptr(send_comp_name, send_grid_name, &
                                        recv_comp_name, recv_grid_name)
@@ -144,10 +147,36 @@ subroutine set_my_exchange(self, send_comp_name, send_grid_name, &
      self%my_name = trim(self%recv_data_name)
   end if
 
-  ! send side, exchange data size == exchange buffer size 
-  self%exchange_data_size   = self%my_exchange%get_exchange_data_size()
-  self%exchange_buffer_size = self%my_exchange%get_exchange_buffer_size()
 
+  ! send side, exchange data size == exchange buffer size
+  if (self%my_exchange%is_send_intpl()) then
+     self%exchange_data_size   = self%my_exchange%get_exchange_buffer_size()
+     self%exchange_buffer_size = self%my_exchange%get_exchange_buffer_size()
+     self%num_of_target        = self%my_exchange%get_num_of_target_rank()
+     allocate(self%exchange_target(self%num_of_target))
+     do i = 1, self%num_of_target
+        self%exchange_target(i)%target_rank  = self%my_exchange%get_target_rank(i)
+        self%exchange_target(i)%num_of_data  = self%my_exchange%get_target_array_size(i)
+        self%exchange_target(i)%num_of_layer = self%num_of_layer
+        allocate(self%exchange_target(i)%buffer(self%exchange_target(i)%num_of_data, self%exchange_target(i)%num_of_layer))
+     end do
+  else
+     self%exchange_data_size   = self%my_exchange%get_exchange_data_size()
+     self%exchange_buffer_size = self%my_exchange%get_exchange_buffer_size()
+     self%num_of_target        = self%my_exchange%get_num_of_target_rank()
+     allocate(self%exchange_target(self%num_of_target))
+     do i = 1, self%num_of_target
+        self%exchange_target(i)%target_rank  = self%my_exchange%get_target_rank(i)
+        self%exchange_target(i)%num_of_data  = self%my_exchange%get_target_array_size(i)
+        self%exchange_target(i)%num_of_layer = self%num_of_layer
+        allocate(self%exchange_target(i)%buffer(self%exchange_target(i)%num_of_data, self%exchange_target(i)%num_of_layer))
+     end do
+  end if
+  !write(0, *) "set_my_exchange ", trim(self%my_name), trim(send_comp_name), trim(recv_comp_name), self%exchange_data_size, self%exchange_buffer_size
+  !do i = 1, self%num_of_target
+  !   write(0, *) self%exchange_target(i)%target_rank, self%exchange_target(i)%num_of_data
+  !end do
+  
   if (self%num_of_layer == 1) then
     allocate(self%data1d(self%exchange_data_size))
     self%data1d(:) = 0.d0   
@@ -169,7 +198,7 @@ subroutine set_my_exchange(self, send_comp_name, send_grid_name, &
   else
      allocate(self%exchange_buffer(self%exchange_buffer_size,self%num_of_layer))
   end if
-  
+
 end subroutine set_my_exchange
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
@@ -315,6 +344,16 @@ end function get_exchange_tag
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
+logical function is_my_intpl(self)
+  implicit none
+  class(data_class) :: self
+
+  is_my_intpl = self%my_exchange%is_my_intpl()
+
+end function is_my_intpl
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
 subroutine put_data_1d(self, data, next_sec, delta_t)
   use jlt_constant, only : STR_MID, ADVANCE_SEND_RECV
   use jlt_utils, only : put_log, error
@@ -328,6 +367,7 @@ subroutine put_data_1d(self, data, next_sec, delta_t)
   character(len=STR_MID) :: log_str
   integer :: i
 
+  
   if (self%time_lag == 0) then ! send data now
      write(log_str,'("  ",A)') "[put_data_1d ] put and send data START , data_name = "//trim(self%my_name)
      call put_log(trim(log_str))
@@ -348,6 +388,7 @@ subroutine put_data_1d(self, data, next_sec, delta_t)
 
   write(log_str,'("  ",A)') "[put_data_1d ] put data START , data_name = "//trim(self%my_name)
   call put_log(trim(log_str))
+
 
   if (self%intvl <= 0) then ! every step send
      call self%my_exchange%local_2_exchange(data, self%data1d)
@@ -395,7 +436,8 @@ subroutine put_data_1d(self, data, next_sec, delta_t)
 
      else ! snapshot data
 
-        if (delta_t == 0) then ! first step
+        
+       if (delta_t == 0) then ! first step
            if (self%exchange_type == ADVANCE_SEND_RECV) then
               write(log_str,'("  ",A)') "[put_data_1d ] put data SKIP , data_name = "//trim(self%my_name)
               call put_log(trim(log_str))
@@ -405,6 +447,11 @@ subroutine put_data_1d(self, data, next_sec, delta_t)
      
         if (mod(next_sec, int(self%intvl, kind=8)) == 0) then ! send step        
            call self%my_exchange%local_2_exchange(data, self%data1d)
+           if (self%my_exchange%is_my_intpl()) then
+              !write(0, *) "put_data_1d, local_2_exchange ", self%data1d
+              call self%my_exchange%interpolate_data(reshape(self%data1d,[size(self%data1d), 1]), &
+                                                     self%exchange_buffer, self%num_of_layer, self%grid_intpl_tag)
+           end if
            call self%my_exchange%send_data_1d(self%data1d, self%exchange_buffer, self%grid_intpl_tag, self%exchange_tag)
         end if
      end if   
@@ -437,7 +484,7 @@ subroutine put_data_2d(self, data, next_sec, delta_t)
      do k = 1, self%get_num_of_layer()
         call self%my_exchange%local_2_exchange(data(:,k), self%data2d(:,k))
      end do
-     call self%my_exchange%send_data_2d(self%data2d, self%exchange_buffer, self%num_of_layer, self%grid_intpl_tag, self%exchange_tag)
+     call self%my_exchange%send_data_2d(self%data2d, self%exchange_target, self%num_of_layer, self%grid_intpl_tag, self%exchange_tag)
      call jml_send_waitall()
      write(log_str,'("  ",A)') "[put_data_2d ] put and send data END , data_name = "//trim(self%my_name)
      call put_log(trim(log_str))
@@ -459,7 +506,7 @@ subroutine put_data_2d(self, data, next_sec, delta_t)
         call self%my_exchange%local_2_exchange(data(:,k), self%data2d(:,k))
      end do
      
-     call self%my_exchange%send_data_2d(self%data2d, self%exchange_buffer, self%num_of_layer, self%grid_intpl_tag, self%exchange_tag)
+     call self%my_exchange%send_data_2d(self%data2d, self%exchange_target, self%num_of_layer, self%grid_intpl_tag, self%exchange_tag)
 
   else
      if (self%is_avr()) then ! average data
@@ -504,7 +551,7 @@ subroutine put_data_2d(self, data, next_sec, delta_t)
                  end if
               end do
            end do   
-           call self%my_exchange%send_data_2d(self%data2d, self%exchange_buffer, self%num_of_layer, self%grid_intpl_tag, self%exchange_tag)
+           call self%my_exchange%send_data_2d(self%data2d, self%exchange_target, self%num_of_layer, self%grid_intpl_tag, self%exchange_tag)
            self%data2d(:,:) = 0.d0 ! reset average data
            self%weight2d(:,:) = 0.d0 ! reset average weight
         end if
@@ -524,7 +571,7 @@ subroutine put_data_2d(self, data, next_sec, delta_t)
               call self%my_exchange%local_2_exchange(data(:,k), self%data2d(:,k))
            end do
            
-           call self%my_exchange%send_data_2d(self%data2d, self%exchange_buffer, self%num_of_layer, self%grid_intpl_tag, self%exchange_tag)
+           call self%my_exchange%send_data_2d(self%data2d, self%exchange_target, self%num_of_layer, self%grid_intpl_tag, self%exchange_tag)
         end if
      end if   
 
@@ -574,7 +621,7 @@ subroutine recv_data_2d(self, current_sec)
     write(log_str,'("  ",A,I5)') "[recv_data_2d] recv data, data_name = "//trim(self%my_name) &
                                 //", exchange_tag = ", self%exchange_tag
     call put_log(trim(log_str))
-    call self%my_exchange%recv_data_2d(self%exchange_buffer, self%num_of_layer, self%exchange_tag)
+    call self%my_exchange%recv_data_2d(self%exchange_target, self%num_of_layer, self%exchange_tag)
     write(log_str,'("  ",A)') "[recv_data_2d] recv data END"
     call put_log(trim(log_str))
   end if
@@ -589,13 +636,16 @@ subroutine interpolate_data_1d(self)
   class(data_class)        :: self
   real(kind=8), pointer    :: intpl_data(:,:)
 
-  if (self%my_exchange%is_my_intpl()) then
-     allocate(intpl_data(size(self%data1d), 1))
-     call self%my_exchange%interpolate_data(self%exchange_buffer, intpl_data, 1, self%grid_intpl_tag, &
-                                            self%factor, self%offset)
+  allocate(intpl_data(size(self%data1d), 1))
+  intpl_data = 0.d0
+  if (self%my_exchange%is_my_intpl()) then ! recv interpolation
+     call self%my_exchange%interpolate_data(self%exchange_buffer, intpl_data, 1, self%grid_intpl_tag)
      self%data1d(:) = intpl_data(:,1)
-     deallocate(intpl_data)
+  else ! send interpolation
+     call self%my_exchange%buffer_2_recv_data(self%exchange_buffer, intpl_data)
+     self%data1d(:) = intpl_data(:,1)
   end if
+  deallocate(intpl_data)
  
 end subroutine interpolate_data_1d
 
@@ -604,20 +654,16 @@ end subroutine interpolate_data_1d
 subroutine interpolate_data_2d(self)
   implicit none
   class(data_class)        :: self
-  real(kind=8), pointer    :: intpl_data(:,:)
-  real(kind=8), pointer    :: recv_data(:,:)
   integer                  :: num_of_layer
-  integer                  :: k
 
   num_of_layer = self%num_of_layer
   
 
   if (self%my_exchange%is_my_intpl()) then
-     allocate(intpl_data(size(self%data2d,1), num_of_layer))
-     call self%my_exchange%interpolate_data(self%exchange_buffer, intpl_data, num_of_layer, self%grid_intpl_tag, &
-                                            self%factor, self%offset)
-     self%data2d(:,:) = intpl_data(:,:)
-     deallocate(intpl_data)
+     call self%my_exchange%target_2_exchange_buffer(self%exchange_target, self%exchange_buffer)
+     call self%my_exchange%interpolate_data(self%exchange_buffer, self%data2d, num_of_layer, self%grid_intpl_tag)
+  else
+     call self%my_exchange%buffer_2_recv_data(self%exchange_buffer, self%data2d)
   end if
 
 end subroutine interpolate_data_2d
@@ -687,7 +733,7 @@ subroutine get_data_2d(self, data, current_sec, is_get_ok)
     write(log_str,'("  ",A,I5)') "[get_data_2d] recv and get data START, data_name = "//trim(self%my_name) &
                                 //", exchange_tag = ", self%exchange_tag
     call put_log(trim(log_str))
-    call self%my_exchange%recv_data_2d(self%exchange_buffer, self%num_of_layer, self%exchange_tag)
+    call self%my_exchange%recv_data_2d(self%exchange_target, self%num_of_layer, self%exchange_tag)
     call jml_recv_waitall()
 
     call self%interpolate_data_2d()

@@ -51,7 +51,7 @@ subroutine set_mapping_table(my_name, send_comp_name, send_grid_name, recv_comp_
 
   call exchange(num_of_exchange)%set_mapping_table(trim(send_comp_name), trim(send_grid_name), &
                                                    trim(recv_comp_name), trim(recv_grid_name), &
-                                                   map_tag, send_grid, recv_grid, coef)
+                                                   map_tag, intpl_flag, send_grid, recv_grid, coef)
 
 end subroutine set_mapping_table
 

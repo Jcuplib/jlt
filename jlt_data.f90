@@ -467,7 +467,7 @@ subroutine put_data_1d(data_name, data, next_sec, delta_t)
   integer(kind=8), intent(IN)  :: next_sec  ! next step seconds
   integer(kind=4), intent(IN)  :: delta_t   ! current step delta_t
   type(data_class), pointer :: data_ptr
-
+  
   data_ptr => get_send_data_ptr(data_name)
 
   if (data_ptr%get_num_of_layer() > 1) then
@@ -527,6 +527,8 @@ subroutine interpolate_recv_data(data_name, current_sec)
 
   data_ptr => get_recv_data_ptr(data_name)
 
+  !!!if (.not.data_ptr%is_my_intpl()) return
+  
   if (data_ptr%get_time_lag() == 0) return
   
   if (mod(current_sec, int(data_ptr%get_intvl(), kind=8)) == 0) then

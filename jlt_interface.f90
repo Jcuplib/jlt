@@ -436,7 +436,7 @@ end function jlt_get_fill_value
 
 subroutine jlt_set_mapping_table(my_model_name, &
                                  send_model_name, send_grid_name, recv_model_name,  recv_grid_name, &
-                                 map_tag, send_grid, recv_grid, coef)
+                                 map_tag, is_recv_intpl, send_grid, recv_grid, coef)
   use jlt_constant, only : NUM_OF_EXCHANGE_GRID, MAX_GRID, NO_GRID, STR_LONG
   use jlt_mpi_lib, only : jml_isLocalLeader, jml_BcastLocal, jml_SendLeader, jml_RecvLeader, jml_GetMyrank, &
                            jml_GetLeaderRank
@@ -450,6 +450,7 @@ subroutine jlt_set_mapping_table(my_model_name, &
   character(len=*), intent(IN)  :: send_model_name, send_grid_name
   character(len=*), intent(IN)  :: recv_model_name, recv_grid_name
   integer, intent(IN)           :: map_tag
+  logical, intent(IN)           :: is_recv_intpl
   integer, intent(IN)           :: send_grid(:), recv_grid(:)
   real(kind=8), intent(IN)      :: coef(:)
   logical :: is_my_intpl  
@@ -460,15 +461,15 @@ subroutine jlt_set_mapping_table(my_model_name, &
   call put_log("set mapping table start : "//trim(send_model_name)//":"//trim(recv_model_name) &
               //", grid = "//trim(send_grid_name)//":"//trim(recv_grid_name),1)
 
- 
+
   my_model_id   = get_comp_id_from_name(trim(my_model_name))
   send_model_id = get_comp_id_from_name(trim(send_model_name))
   recv_model_id = get_comp_id_from_name(trim(recv_model_name))
 
   if (my_model_id == recv_model_id) then
-     is_my_intpl = .true.
+     is_my_intpl = is_recv_intpl
   else
-     is_my_intpl = .false.
+     is_my_intpl = .not.is_recv_intpl
   end if
   
   call set_mapping_table(trim(my_model_name), trim(send_model_name), trim(send_grid_name), &
@@ -590,6 +591,7 @@ subroutine jlt_set_time(comp_name, current_time, delta_t)
                                               ", next_sec = ", next_sec, ", delta_t = ", delta_t
   call put_log(trim(log_str))
   
+  
 
   do i = 1, get_num_of_recv_data()
      call recv_my_data(get_recv_data_name(i), current_sec)
@@ -619,7 +621,7 @@ subroutine jlt_put_data_1d(data_name, data, data_vector)
   real(kind=8), intent(IN)           :: data(:)
   real(kind=8), optional, intent(IN) :: data_vector(:)
   character(len=STR_MID) :: log_str
-  
+
   call put_log("------------------------------------------------------------------------------------------")
 
   write(log_str,'("  ",A)') "[jlt_put_data_1d ] put data START , data_name = "//trim(data_name)
@@ -704,7 +706,7 @@ subroutine jlt_put_data_25d(data_name, data, data_vector)
   write(log_str,'("  ",A)') "[jlt_put_data_25d ] put data START , data_name = "//trim(data_name)
   call put_log(trim(log_str))
 
-  write(0, *) "jlt_put_data_25d ", trim(data_name), ", ", minval(data), maxval(data)
+  !write(0, *) "jlt_put_data_25d ", trim(data_name), ", ", minval(data), maxval(data)
   
   call put_data_2d(data_name, data, next_sec, current_delta_t)
 
