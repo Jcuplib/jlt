@@ -325,13 +325,13 @@ subroutine make_local_mapping_table_no_sort(global_index, global_target, global_
   integer                  :: res
   integer                  :: i
 
-  do i = 1, size(global_index)
-     write(100+jml_GetMyrankGlobal(), *) "global_mapping ", global_index(i), global_target(i), global_coef(i)
-  end do
+  !do i = 1, size(global_index)
+  !   write(100+jml_GetMyrankGlobal(), *) "global_mapping ", global_index(i), global_target(i), global_coef(i)
+  !end do
   
-  do i = 1, size(grid_index)
-     write(100+jml_GetMyrankGlobal(), *) "grid_index ", grid_index(i)
-  end do
+  !do i = 1, size(grid_index)
+  !   write(100+jml_GetMyrankGlobal(), *) "grid_index ", grid_index(i)
+  !end do
 
   table_size = size(grid_index)
 
@@ -367,9 +367,9 @@ subroutine make_local_mapping_table_no_sort(global_index, global_target, global_
      end if
   end do
      
-  do i = 1, size(local_index)
-     write(100+jml_GetMyrankGlobal(), *) "local_mapping ", local_index(i), local_target(i), local_coef(i)
-  end do
+  !do i = 1, size(local_index)
+  !   write(100+jml_GetMyrankGlobal(), *) "local_mapping ", local_index(i), local_target(i), local_coef(i)
+  !end do
 
   deallocate(sorted_index)
   
@@ -775,6 +775,7 @@ end subroutine delete_same_index
 
 subroutine make_conversion_table(remapping_index, grid_index, conv_table)
   use jlt_utils, only : sort_int_1d, binary_search
+  use mpi
   implicit none
   integer, pointer    :: remapping_index(:)  ! local remapping table
   integer, pointer    :: grid_index(:)       ! data grid index
@@ -783,7 +784,18 @@ subroutine make_conversion_table(remapping_index, grid_index, conv_table)
   integer, pointer    :: sorted_pos(:)
   integer             :: res
   integer             :: i
+  integer :: my_rank, ierr
 
+  call mpi_comm_rank(MPI_COMM_WORLD, my_rank, ierr)
+
+  !write(300 + my_rank, *) "make_conversion_table"
+  !do i = 1, size(remapping_index)
+  !   write(300 + my_rank, *) remapping_index(i)
+  !end do
+  !do i = 1, size(grid_index)
+  !   write(300 + my_rank, *) grid_index(i)
+  !end do
+  
   allocate(sorted_index(size(grid_index)))
   allocate(sorted_pos(size(grid_index)))
 
@@ -799,6 +811,7 @@ subroutine make_conversion_table(remapping_index, grid_index, conv_table)
   do i = 1, size(remapping_index)
      res = binary_search(sorted_index, remapping_index(i))
      conv_table(i) = sorted_pos(res)
+     !write(300 + my_rank, *) conv_table(i)
   end do
 
   deallocate(sorted_index)

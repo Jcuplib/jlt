@@ -92,6 +92,7 @@ module jlt_interface
 
   interface jlt_recv_array
     module procedure recv_array_from_send_model_str
+    module procedure jlt_put_data_1d, jlt_put_data_25d
     module procedure recv_array_from_send_model_int
     module procedure recv_array_from_send_model_real
     module procedure recv_array_from_send_model_dbl

@@ -65,6 +65,7 @@ module jlt_exchange_class
      type(recv_map_info)           :: my_map
      
      logical                       :: intpl_flag = .false.  ! my interpolation or not
+
      
    contains
      procedure :: set_mapping_table         ! subroutine (send_comp, send_grid, recv_comp, recv_grid, map_tag, send_index, recv_index, coef)
@@ -159,6 +160,7 @@ subroutine set_mapping_table_send_intpl(self, send_comp_name, send_grid_name, re
   use jlt_utils, only      : put_log
   use jlt_remapping, only  : make_local_mapping_table, make_local_mapping_table_no_sort, get_target_grid_rank, reorder_index_by_target_rank, &
                              make_exchange_table, make_conversion_table
+  use mpi
   implicit none
   class(exchange_class)        :: self
   character(len=*), intent(IN) :: send_comp_name, send_grid_name
@@ -173,6 +175,10 @@ subroutine set_mapping_table_send_intpl(self, send_comp_name, send_grid_name, re
   type(grid_class), pointer    :: my_grid
   integer :: i, j
   integer, pointer             :: my_grid_index(:)
+  integer                      :: num_of_exchange, offset
+  integer :: my_rank, ierr
+
+  call mpi_comm_rank(MPI_COMM_WORLD, my_rank, ierr)
   
   call put_log("------------------------------------------------------------------------------------------")
   call put_log("jlt_exchange_class : set_mapping_table start")
@@ -207,30 +213,36 @@ subroutine set_mapping_table_send_intpl(self, send_comp_name, send_grid_name, re
   call put_log("jlt_exchange_class : set_mapping_table, make_local_mapping_table  end")
 
 
-  write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "global mapping table"
-  write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "send_comp = "//trim(send_comp_name)//", recv_comp = "//trim(recv_comp_name)
+  !write(399+source_comp_id*100 + my_grid%get_my_rank(), *) "global mapping table"
+  !write(399+source_comp_id*100 + my_grid%get_my_rank(), *) "send_comp = "//trim(send_comp_name)//", recv_comp = "//trim(recv_comp_name)
 
   do i = 1, size(send_grid)
-     write(300+source_comp_id*100 + my_grid%get_my_rank(), *) send_grid(i), recv_grid(i), coef(i)
+     !write(399+source_comp_id*100 + my_grid%get_my_rank(), *) send_grid(i), recv_grid(i), coef(i)
   end do
 
   my_grid_index => my_grid%get_grid_index_ptr()
 
-  write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "my grid_index"
+  !write(399+source_comp_id*100 + my_grid%get_my_rank(), *) "my grid_index"
   do i = 1, size(my_grid_index)
-     write(300+source_comp_id*100 + my_grid%get_my_rank(), *) my_grid_index(i)
+     !write(399+source_comp_id*100 + my_grid%get_my_rank(), *) my_grid_index(i)
   end do
 
   call put_log("jlt_exchange_class : set_mapping_table, reorder_index_by_target_rank start")
 
   call reorder_index_by_target_rank(self%send_grid_index, self%recv_grid_index, self%coef, self%target_rank)
 
+  !write(399 + my_rank, *) "send_mapping_table_send_intpl, reorder_table ", send_comp_name, recv_comp_name
+  do i = 1, size(self%target_rank)
+     !write(399 + my_rank, *) self%send_grid_index(i), self%recv_grid_index(i), self%coef(i), self%target_rank(i)
+  end do
+  
+  
   call put_log("jlt_exchange_class : set_mapping_table, reorder_index_by_target_rank end")
 
 
-  write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "local mapping table,", self%index_size
+  !write(399+my_rank, *) "local mapping table,", self%index_size
   do i = 1, self%index_size
-     write(300+source_comp_id*100 + my_grid%get_my_rank(), *) self%send_grid_index(i), self%recv_grid_index(i), self%coef(i), self%target_rank(i)
+     !write(399+my_rank, *) self%send_grid_index(i), self%recv_grid_index(i), self%coef(i), self%target_rank(i)
   end do
 
   
@@ -249,12 +261,12 @@ subroutine set_mapping_table_send_intpl(self, send_comp_name, send_grid_name, re
      self%ex_map%exchange_data_size = size(self%ex_map%exchange_index)
   end if
 
-  write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "exchange table,", self%ex_map%num_of_exchange_rank
+  !write(399+ my_rank, *) "exchange table,", send_comp_name, recv_comp_name, self%ex_map%num_of_exchange_rank
   do i = 1, self%ex_map%num_of_exchange_rank
-     write(300+source_comp_id*100 + my_grid%get_my_rank(), *) self%ex_map%exchange_rank(i), &
-          self%ex_map%num_of_exchange(i), self%ex_map%offset(i)
+     !write(399+my_rank, *) self%ex_map%exchange_rank(i), &
+          !self%ex_map%num_of_exchange(i), self%ex_map%offset(i)
      do j = 1, self%ex_map%num_of_exchange(i)
-        write(300+source_comp_id*100 + my_grid%get_my_rank(), *) self%ex_map%exchange_index(self%ex_map%offset(i)+j)
+        !write(399+my_rank, *) self%ex_map%exchange_index(self%ex_map%offset(i)+j)
      end do
   end do
 
@@ -268,6 +280,7 @@ subroutine set_mapping_table_send_intpl(self, send_comp_name, send_grid_name, re
     call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 1")
     call make_send_map_info(self%send_grid_index, self%send_map)
     call make_grid_conv_table(my_grid%get_grid_index_ptr(), self%send_map%intpled_index, self%ex_map%conv_table)
+    call make_grid_conv_table(my_grid%get_grid_index_ptr(), self%send_map%intpled_index, self%send_map%conv_table)
     call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 2")
     call make_conversion_table(self%send_grid_index, self%send_map%intpled_index, self%send_conv_table)
     call make_conversion_table(self%recv_grid_index, self%ex_map%exchange_index, self%recv_conv_table)
@@ -278,11 +291,11 @@ subroutine set_mapping_table_send_intpl(self, send_comp_name, send_grid_name, re
     call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 4")
     call make_recv_map_info(self%ex_map%exchange_index, self%my_map)
     call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 5")
-    call make_grid_conv_table(self%ex_map%exchange_index, self%my_map%intpled_index, self%recv_conv_table)
+    call make_grid_conv_table(self%my_map%intpled_index, self%ex_map%exchange_index, self%recv_conv_table)
     call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 6")
     !call recv_recv_grid_index(self)
     call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 7")
-    call make_conversion_table(self%recv_grid_index, self%my_map%intpled_index, self%my_map%conv_table)
+    call make_grid_conv_table(my_grid%get_grid_index_ptr(), self%my_map%intpled_index, self%my_map%conv_table)
     call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 8")
     !call send_recv_grid_index(self, self%recv_grid_index)
   end if
@@ -290,14 +303,14 @@ subroutine set_mapping_table_send_intpl(self, send_comp_name, send_grid_name, re
   call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table end")
 
   
-  write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "exchange rank"
+  !write(399+my_rank, *) "exchange rank"
   do i = 1, self%ex_map%num_of_exchange_rank
-     write(300+source_comp_id*100 + my_grid%get_my_rank(), *) self%ex_map%exchange_rank(i), self%ex_map%num_of_exchange(i)
+     !write(399+my_rank, *) self%ex_map%exchange_rank(i), self%ex_map%num_of_exchange(i)
   end do
 
-  write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "exchange index"
+  !write(399+my_rank, *) "exchange index"
   do i = 1, size(self%ex_map%exchange_index)
-     write(300+source_comp_id*100 + my_grid%get_my_rank(), *) self%ex_map%exchange_index(i)
+     !write(399+my_rank, *) self%ex_map%exchange_index(i)
   end do
 
   return
@@ -462,6 +475,7 @@ end subroutine set_mapping_table_recv_intpl
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
 subroutine make_grid_conv_table(grid_index, exchange_index, conv_table)
+  use mpi
   use jlt_utils, only : sort_int_1d, binary_search
   implicit none
   integer, intent(IN)  :: grid_index(:)
@@ -471,8 +485,13 @@ subroutine make_grid_conv_table(grid_index, exchange_index, conv_table)
   integer, allocatable :: sorted_pos(:)
   integer              :: res
   integer              :: i, counter
+
+  integer :: my_rank, ierr
   
   if (size(exchange_index) <= 0) return
+
+  call mpi_comm_rank(MPI_COMM_WORLD, my_rank, ierr)
+
   
   allocate(conv_table(size(exchange_index)))
 
@@ -491,8 +510,56 @@ subroutine make_grid_conv_table(grid_index, exchange_index, conv_table)
      res = binary_search(sorted_index, exchange_index(i))
      if (res > 0) conv_table(i) = sorted_pos(res)
   end do
+
+  !write(399 + my_rank, *) "make_grid_conf_table, "
+  !do i = 1, size(grid_index)
+  !   write(300 + my_rank, *) grid_index(i), exchange_index(i), conv_table(i)
+  !end do
   
 end subroutine make_grid_conv_table
+  
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+subroutine make_grid_conv_table_recv(grid_index, exchange_index, conv_table)
+  use mpi
+  use jlt_utils, only : sort_int_1d, binary_search
+  implicit none
+  integer, intent(IN)  :: grid_index(:)
+  integer, intent(IN)  :: exchange_index(:)
+  integer, intent(INOUT) :: conv_table(:)
+  integer, allocatable :: sorted_index(:)
+  integer, allocatable :: sorted_pos(:)
+  integer              :: res
+  integer              :: i, counter
+
+  integer :: my_rank, ierr
+  
+  if (size(exchange_index) <= 0) return
+
+  call mpi_comm_rank(MPI_COMM_WORLD, my_rank, ierr)
+  
+  allocate(sorted_index(size(grid_index)))
+  allocate(sorted_pos(size(grid_index)))
+
+  do i = 1, size(grid_index)
+     sorted_index(i) = grid_index(i)
+     sorted_pos(i)   = i
+  end do
+  
+  call sort_int_1d(size(grid_index), sorted_index, sorted_pos)
+
+  conv_table(:) = 0
+  do i = 1, size(exchange_index)
+     res = binary_search(sorted_index, exchange_index(i))
+     if (res > 0) conv_table(i) = sorted_pos(res)
+  end do
+  
+  !write(399 + my_rank, *) "make_grid_conf_table, "
+  do i = 1, size(grid_index)
+     !write(399 + my_rank, *) grid_index(i), exchange_index(i), conv_table(i)
+  end do
+
+end subroutine make_grid_conv_table_recv
   
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
@@ -577,7 +644,7 @@ subroutine recv_recv_grid_index(self)
 
   call jml_recv_waitall()
 
-  write(0, *) "recv_recv_grid_index, ", self%recv_grid_index, exchange_buffer
+  !write(0, *) "recv_recv_grid_index, ", self%recv_grid_index, exchange_buffer
   
   call make_conversion_table(self%recv_grid_index, exchange_buffer, self%recv_conv_table)
   
@@ -676,6 +743,7 @@ character(len=STR_SHORT) function get_my_name(self)
 
 end function get_my_name
 
+  
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
 function get_exchange_data_size(self) result (res)
@@ -781,24 +849,39 @@ subroutine local_2_exchange(self, grid_data, exchange_data)
   real(kind=8), intent(INOUT) :: exchange_data(:)
   integer :: i
 
+  if (self%is_send_intpl()) then
+  !write(0, *) "local to exchange ", jml_GetMyrankGlobal(), size(exchange_data), self%get_exchange_data_size(), self%send_map%conv_table, grid_data
+  do i = 1, self%get_exchange_data_size()
+     exchange_data(i) = grid_data(self%send_map%conv_table(i))
+  end do
+  else
   !write(0, *) "local to exchange ", jml_GetMyrankGlobal(), size(exchange_data), self%ex_map%exchange_data_size, self%ex_map%conv_table, grid_data
   do i = 1, self%ex_map%exchange_data_size
      exchange_data(i) = grid_data(self%ex_map%conv_table(i))
   end do
+
+  end if
 
 end subroutine local_2_exchange
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
 subroutine exchange_2_local(self, exchange_data, grid_data)
+  use mpi
   implicit none
   class(exchange_class)       :: self
   real(kind=8), intent(IN)    :: exchange_data(:)
   real(kind=8), intent(INOUT) :: grid_data(:)
   integer :: i
+  integer :: my_rank, ierr
 
+  call mpi_comm_rank(MPI_COMM_WORLD, my_rank, ierr)
+  !write(399 + my_rank, *) "exchange_2_local, ", exchange_data
+  !write(399 + my_rank, *) "exchange_2_local, ", self%my_map%intpled_data_size
+  
   do i = 1, self%my_map%intpled_data_size
     grid_data(self%my_map%conv_table(i)) = exchange_data(i)
+    !write(399 + my_rank, *) exchange_data(i), self%my_map%conv_table(i), grid_data(i)
   end do
 
 end subroutine exchange_2_local
@@ -852,7 +935,8 @@ subroutine send_data_1d(self, data, exchange_buffer, intpl_tag, exchange_tag)
   call put_log(trim(log_str))
 
   if (self%is_my_intpl()) then
-    ! for send side interpolation, interpolation code will be implemented 
+     call self%interpolate_data(reshape(data,[size(data), 1]), &
+                                exchange_buffer, 1, intpl_tag)
   else
     do i = 1, self%ex_map%exchange_data_size
       exchange_buffer(i,1) = data(i)
@@ -905,12 +989,14 @@ subroutine send_data_2d(self, data, exchange_buffer, num_of_layer, intpl_tag, ex
   integer                     :: target_rank
   integer                     :: num_of_data
   integer                     :: offset
+  integer                     :: intpl_buffer_size
+  real(kind=8), pointer       :: intpl_buffer(:,:)
   type data_ptr_type
      real(kind=8), pointer       :: data_ptr
   end type data_ptr_type
   type (data_ptr_type), allocatable :: ptr_array(:)
   integer :: i, k
-  
+
   write(log_str,'("  ",A,I5)') "[send_data_2d] send data START, exchange_tag = ", exchange_tag
   call put_log(trim(log_str))
 
@@ -921,12 +1007,24 @@ subroutine send_data_2d(self, data, exchange_buffer, num_of_layer, intpl_tag, ex
 
   allocate(ptr_array(num_of_layer))
 
+  if (self%is_my_intpl()) then ! send interpolation
+     intpl_buffer_size = 0
+     do i = 1, self%ex_map%num_of_exchange_rank
+        intpl_buffer_size = intpl_buffer_size + self%ex_map%num_of_exchange(i)
+     end do
+     allocate(intpl_buffer(intpl_buffer_size, num_of_layer))
+  end if
+  
+  
     do k = 1, num_of_layer
-       !if (self%is_my_intpl()) then
-       !else
-       !   exchange_buffer(:,k) = data(:,k)
-       !end if
-
+       if (self%is_my_intpl()) then
+           call self%interpolate_data(data, &
+                                      intpl_buffer, num_of_layer, intpl_tag)
+          !write(0, *) "send_data_2d, send interpolation ", intpl_buffer
+       else
+          !write(0, *) "send_data_2d, recv interpolation"
+          !exchange_buffer(:,k) = data(:,k)
+       end if
     end do
     
     do i = 1, self%ex_map%num_of_exchange_rank
@@ -935,8 +1033,12 @@ subroutine send_data_2d(self, data, exchange_buffer, num_of_layer, intpl_tag, ex
          offset      = self%ex_map%offset(i)
          !!!ptr_array(k)%data_ptr    => exchange_buffer(offset + 1, k)
 
-         exchange_buffer(i)%buffer(1:num_of_data, 1:num_of_layer) = data(offset+1:offset+num_of_data, 1:num_of_layer)
-
+         if (self%is_my_intpl()) then ! send interpolation
+           exchange_buffer(i)%buffer(1:num_of_data, 1:num_of_layer) = intpl_buffer(offset+1:offset+num_of_data, 1:num_of_layer)
+         else
+           exchange_buffer(i)%buffer(1:num_of_data, 1:num_of_layer) = data(offset+1:offset+num_of_data, 1:num_of_layer)
+         end if
+        
          if (get_log_level() == DETAIL_LOG) then
             write(log_str,'("  ",A,I8,A,I10, A, F15.5, F15.5)') "[send_data_2d] target_rank = ", target_rank, ", num_of_data = ", num_of_data, &
                  ", min max = ", minval(exchange_buffer(i)%buffer), maxval(exchange_buffer(i)%buffer)
@@ -949,6 +1051,10 @@ subroutine send_data_2d(self, data, exchange_buffer, num_of_layer, intpl_tag, ex
     !!!end do
     end do
 
+    if (self%is_my_intpl()) then
+       deallocate(intpl_buffer)
+    end if
+    
     write(log_str,'("  ",A,I5)') "[send_data_2d] send data END, exchange_tag = ", exchange_tag
     call put_log(trim(log_str))
  
@@ -1202,20 +1308,31 @@ end subroutine recv_data_2d_org
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
 subroutine buffer_2_recv_data(self, exchange_buffer, recv_data)
+  use mpi
   implicit none
   class(exchange_class)       :: self
   real(kind=8), intent(IN)    :: exchange_buffer(:,:)
   real(kind=8), intent(INOUT) :: recv_data(:,:)
   integer :: recv_index
   integer :: i, k
+  integer :: my_rank, ierr
 
+  call mpi_comm_rank(MPI_COMM_WORLD, my_rank, ierr)
+  !write(399+my_rank, *) "buffer_2_recv_data"
   do k = 1, size(recv_data, 2)
      do i = 1, size(exchange_buffer, 1)
         recv_index = self%recv_conv_table(i)
         recv_data(recv_index, k) = recv_data(recv_index, k) + exchange_buffer(i, k)
+        !write(399 + my_rank, *) exchange_buffer(i, k), recv_index, recv_data(recv_index, k)
      end do
   end do
   
+  do k = 1, size(recv_data, 2)
+     do i = 1, size(exchange_buffer, 1)
+        !write(399 + my_rank, *) exchange_buffer(i, k), recv_data(i, k)
+     end do
+  end do
+
 end subroutine buffer_2_recv_data
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
@@ -1223,6 +1340,7 @@ end subroutine buffer_2_recv_data
 subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag)
   use jlt_grid, only : get_grid_ptr
   use jlt_utils, only : put_log
+  use mpi
   implicit none
   class(exchange_class)       :: self
   real(kind=8), intent(IN)    :: send_data(:,:)
@@ -1238,11 +1356,14 @@ subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag)
   integer :: i, k, n
   type(grid_class), pointer   :: my_grid
   character(len=STR_MID)      :: log_str
+  integer :: my_rank
+
+  call MPI_comm_rank(MPI_COMM_WORLD, my_rank, i)
   
   write(log_str,'("  ",A,I5)') "[interpolate_data] interpolate data START, intpl_tag = ", intpl_tag
   call put_log(trim(log_str))
 
-  !!!!my_grid => get_grid_ptr(trim(self%recv_grid_name))
+  !!!my_grid => get_grid_ptr(trim(self%recv_grid_name))
   
   recv_data(:,:) = 0.d0
 
@@ -1291,7 +1412,7 @@ subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag)
     do k = 1, num_of_layer
        do i = 1, size(self%coef)
          recv_data(recv_index(i),k) = recv_data(recv_index(i),k) + send_data(send_index(i),k)*self%coef(i)
-         !write(0, *) i, send_index(i), recv_index(i), send_data(send_index(i),k), recv_data(recv_index(i),k), self%coef(i)
+         write(my_rank+300, *) i, send_index(i), recv_index(i), send_data(send_index(i),k), recv_data(recv_index(i),k), self%coef(i)
          !write(300+self%recv_comp_id*100 + my_grid%get_my_rank(), *) i, send_index(i), recv_index(i), send_data(send_index(i),k), recv_data(recv_index(i),k), self%coef(i)
       end do
     end do

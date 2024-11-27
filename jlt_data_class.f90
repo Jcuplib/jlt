@@ -150,7 +150,11 @@ subroutine set_my_exchange(self, send_comp_name, send_grid_name, &
 
   ! send side, exchange data size == exchange buffer size
   if (self%my_exchange%is_send_intpl()) then
-     self%exchange_data_size   = self%my_exchange%get_exchange_buffer_size()
+     if (self%my_exchange%is_my_intpl()) then ! send interpolation send side
+        self%exchange_data_size   = self%my_exchange%get_exchange_data_size()
+     else ! only send interpolation recv side, exchange_data_size = exchange_buffer_size
+        self%exchange_data_size   = self%my_exchange%get_exchange_buffer_size()
+     end if
      self%exchange_buffer_size = self%my_exchange%get_exchange_buffer_size()
      self%num_of_target        = self%my_exchange%get_num_of_target_rank()
      allocate(self%exchange_target(self%num_of_target))
@@ -366,7 +370,7 @@ subroutine put_data_1d(self, data, next_sec, delta_t)
   real(kind=8) :: weight
   character(len=STR_MID) :: log_str
   integer :: i
-
+  real(kind=8), allocatable :: send_data_buffer(:)
   
   if (self%time_lag == 0) then ! send data now
      write(log_str,'("  ",A)') "[put_data_1d ] put and send data START , data_name = "//trim(self%my_name)
@@ -446,13 +450,13 @@ subroutine put_data_1d(self, data, next_sec, delta_t)
         end if
      
         if (mod(next_sec, int(self%intvl, kind=8)) == 0) then ! send step        
-           call self%my_exchange%local_2_exchange(data, self%data1d)
-           if (self%my_exchange%is_my_intpl()) then
-              !write(0, *) "put_data_1d, local_2_exchange ", self%data1d
-              call self%my_exchange%interpolate_data(reshape(self%data1d,[size(self%data1d), 1]), &
-                                                     self%exchange_buffer, self%num_of_layer, self%grid_intpl_tag)
-           end if
-           call self%my_exchange%send_data_1d(self%data1d, self%exchange_buffer, self%grid_intpl_tag, self%exchange_tag)
+              call self%my_exchange%local_2_exchange(data, self%data1d)
+           !!!if (self%my_exchange%is_my_intpl()) then
+           !!!   !write(0, *) "put_data_1d, local_2_exchange ", self%data1d
+           !!!   call self%my_exchange%interpolate_data(reshape(self%data1d,[size(self%data1d), 1]), &
+           !!!                                          self%exchange_buffer, self%num_of_layer, self%grid_intpl_tag)
+           !!!end if
+              call self%my_exchange%send_data_1d(self%data1d, self%exchange_buffer, self%grid_intpl_tag, self%exchange_tag)
         end if
      end if   
 
@@ -587,18 +591,22 @@ end subroutine put_data_2d
 subroutine recv_data_1d(self, current_sec)
   use jlt_constant, only : STR_MID
   use jlt_utils, only : put_log
+  use mpi
   implicit none
   class(data_class)           ::self
   integer(kind=8), intent(IN) :: current_sec
   character(len=STR_MID) :: log_str
-
+  integer :: my_rank, ierr
+  
   if (self%time_lag == 0) return
   
   if (mod(current_sec, int(self%intvl, kind=8)) == 0) then
     write(log_str,'("  ",A,I5)') "[recv_data_1d] recv data START, data_name = "//trim(self%my_name) &
                                 //", exchange_tag = ", self%exchange_tag
+    call mpi_comm_rank(MPI_COMM_WORLD, my_rank, ierr)
     call put_log(trim(log_str))
     call self%my_exchange%recv_data_1d(self%exchange_buffer, self%exchange_tag)
+    
     write(log_str,'("  ",A)') "[recv_data_1d] recv data END"
     call put_log(trim(log_str))
   end if
@@ -632,10 +640,13 @@ end subroutine recv_data_2d
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
 subroutine interpolate_data_1d(self)
+  use mpi
   implicit none
   class(data_class)        :: self
   real(kind=8), pointer    :: intpl_data(:,:)
 
+  integer :: my_rank, ierr
+  
   allocate(intpl_data(size(self%data1d), 1))
   intpl_data = 0.d0
   if (self%my_exchange%is_my_intpl()) then ! recv interpolation
@@ -643,6 +654,8 @@ subroutine interpolate_data_1d(self)
      self%data1d(:) = intpl_data(:,1)
   else ! send interpolation
      call self%my_exchange%buffer_2_recv_data(self%exchange_buffer, intpl_data)
+     call mpi_comm_rank(MPI_COMM_WORLD, my_rank, ierr)
+     !write(399+my_rank, *) "interpolate_data_1d, ", self%exchange_buffer, intpl_data
      self%data1d(:) = intpl_data(:,1)
   end if
   deallocate(intpl_data)
@@ -659,10 +672,12 @@ subroutine interpolate_data_2d(self)
   num_of_layer = self%num_of_layer
   
 
-  if (self%my_exchange%is_my_intpl()) then
+  if (self%my_exchange%is_my_intpl()) then ! recv interpolation
      call self%my_exchange%target_2_exchange_buffer(self%exchange_target, self%exchange_buffer)
      call self%my_exchange%interpolate_data(self%exchange_buffer, self%data2d, num_of_layer, self%grid_intpl_tag)
   else
+     call self%my_exchange%target_2_exchange_buffer(self%exchange_target, self%exchange_buffer)
+     self%data2d(:,:) = 0.d0
      call self%my_exchange%buffer_2_recv_data(self%exchange_buffer, self%data2d)
   end if
 

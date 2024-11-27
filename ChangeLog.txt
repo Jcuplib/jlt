@@ -160,3 +160,17 @@ Routines
 Detail
  ２次元データの送受信に汎用バッファではなくデータ毎のバッファを使うよう変更。
 
+-----------------------------------------------------------------
+
+Version:0.020501
+Date:2024/11/27
+
+Files: jlt_data_class.f90, jlt_exchange_class.f90
+
+Routines
+ set_mapping_table_send_intpl : [mod]
+ local_2_exchange          : [mod]
+ 他
+ 
+Detail
+ 送信側補間の格子変換テーブルのバグを修正
