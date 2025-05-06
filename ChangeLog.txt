@@ -169,8 +169,21 @@ Files: jlt_data_class.f90, jlt_exchange_class.f90
 
 Routines
  set_mapping_table_send_intpl : [mod]
- local_2_exchange          : [mod]
+ local_2_exchange           : [mod]
  他
  
 Detail
  送信側補間の格子変換テーブルのバグを修正
+
+-----------------------------------------------------------------
+
+Version:0.020600
+Date:2025/05/01
+
+Files: jlt_data_class.f90
+
+Routines
+ mod funcsions           l : [mod]
+ 
+Detail
+ mod関数のkind指定で明示的に変数の型を用いるよう変更

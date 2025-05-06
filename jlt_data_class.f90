@@ -427,7 +427,7 @@ subroutine put_data_1d(self, data, next_sec, delta_t)
            end if
         end if
         
-        if (mod(next_sec, int(self%intvl, kind=8)) == 0) then ! send step
+        if (mod(next_sec, int(self%intvl, kind=kind(next_sec))) == 0) then ! send step
            do i = 1, self%exchange_data_size
               if (self%weight2d(i, 1) /= 0) then
                  self%data1d(i) = self%data1d(i) / self%weight2d(i, 1)
@@ -449,7 +449,7 @@ subroutine put_data_1d(self, data, next_sec, delta_t)
            end if
         end if
      
-        if (mod(next_sec, int(self%intvl, kind=8)) == 0) then ! send step        
+        if (mod(next_sec, int(self%intvl, kind=kind(next_sec))) == 0) then ! send step        
               call self%my_exchange%local_2_exchange(data, self%data1d)
            !!!if (self%my_exchange%is_my_intpl()) then
            !!!   !write(0, *) "put_data_1d, local_2_exchange ", self%data1d
@@ -547,7 +547,7 @@ subroutine put_data_2d(self, data, next_sec, delta_t)
            end if
         end if
         
-        if (mod(next_sec, int(self%intvl, kind=8)) == 0) then ! send step
+        if (mod(next_sec, int(self%intvl, kind=kind(next_sec))) == 0) then ! send step
            do k = 1, self%get_num_of_layer()
               do i = 1, self%exchange_data_size
                  if (self%weight2d(i, k) /= 0) then
@@ -570,7 +570,7 @@ subroutine put_data_2d(self, data, next_sec, delta_t)
            end if
         end if
         
-        if (mod(next_sec, int(self%intvl, kind=8)) == 0) then ! send step        
+        if (mod(next_sec, int(self%intvl, kind=kind(next_sec))) == 0) then ! send step        
            do k = 1, self%get_num_of_layer()
               call self%my_exchange%local_2_exchange(data(:,k), self%data2d(:,k))
            end do
@@ -600,7 +600,7 @@ subroutine recv_data_1d(self, current_sec)
   
   if (self%time_lag == 0) return
   
-  if (mod(current_sec, int(self%intvl, kind=8)) == 0) then
+  if (mod(current_sec, int(self%intvl, kind=kind(current_sec))) == 0) then
     write(log_str,'("  ",A,I5)') "[recv_data_1d] recv data START, data_name = "//trim(self%my_name) &
                                 //", exchange_tag = ", self%exchange_tag
     call mpi_comm_rank(MPI_COMM_WORLD, my_rank, ierr)
@@ -625,7 +625,7 @@ subroutine recv_data_2d(self, current_sec)
   
   if (self%time_lag == 0) return ! when time_lag == 0
 
-  if (mod(current_sec, int(self%intvl, kind=8)) == 0) then
+  if (mod(current_sec, int(self%intvl, kind=kind(current_sec))) == 0) then
     write(log_str,'("  ",A,I5)') "[recv_data_2d] recv data, data_name = "//trim(self%my_name) &
                                 //", exchange_tag = ", self%exchange_tag
     call put_log(trim(log_str))
@@ -712,7 +712,7 @@ subroutine get_data_1d(self, data, current_sec, is_get_ok)
     call put_log(trim(log_str))
   end if
   
-  if (mod(current_sec, int(self%intvl, kind=8)) == 0) then
+  if (mod(current_sec, int(self%intvl, kind=kind(currnet_sec))) == 0) then
 
      data(:) = self%fill_value  ! set fill value
 
@@ -765,7 +765,7 @@ subroutine get_data_2d(self, data, current_sec, is_get_ok)
     call put_log(trim(log_str))
   end if
 
-  if (mod(current_sec, int(self%intvl, kind=8)) == 0) then
+  if (mod(current_sec, int(self%intvl, kind=kind(current_sec))) == 0) then
 
      data(:,1:self%get_num_of_layer()) = self%fill_value  ! set fill value
 
