@@ -712,7 +712,7 @@ subroutine get_data_1d(self, data, current_sec, is_get_ok)
     call put_log(trim(log_str))
   end if
   
-  if (mod(current_sec, int(self%intvl, kind=kind(currnet_sec))) == 0) then
+  if (mod(current_sec, int(self%intvl, kind=kind(current_sec))) == 0) then
 
      data(:) = self%fill_value  ! set fill value
 
