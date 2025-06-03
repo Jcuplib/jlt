@@ -416,8 +416,8 @@ subroutine put_data_1d(self, data, next_sec, delta_t)
            end if
         end do
 
-        write(log_str,'("  ",A,F8.5)') "[put_data_1d ] average data, data_name = "//trim(self%my_name)//", weight = ",weight
-        call put_log(trim(log_str))
+       ! write(log_str,'("  ",A,F8.5)') "[put_data_1d ] average data, data_name = "//trim(self%my_name)//", weight = ",weight
+       ! call put_log(trim(log_str))
 
         if (delta_t == 0) then ! first step
            if (self%exchange_type == ADVANCE_SEND_RECV) then
@@ -536,8 +536,8 @@ subroutine put_data_2d(self, data, next_sec, delta_t)
 
        end do
        
-        write(log_str,'("  ",A,F8.5)') "[put_data_2d ] average data, data_name = "//trim(self%my_name)//", weight = ",weight
-        call put_log(trim(log_str))
+        !write(log_str,'("  ",A,F8.5)') "[put_data_2d ] average data, data_name = "//trim(self%my_name)//", weight = ",weight
+        !call put_log(trim(log_str))
 
         if (delta_t == 0) then ! first step
            if (self%exchange_type == ADVANCE_SEND_RECV) then
@@ -720,8 +720,8 @@ subroutine get_data_1d(self, data, current_sec, is_get_ok)
 
      is_get_ok = .true.
 
-     write(log_str,'("  ",A,F15.5,F15.5)') "[get_data_1d ] get data OK, data_name = "//trim(self%my_name), minval(data), maxval(data)
-     call put_log(trim(log_str))
+     !write(log_str,'("  ",A,F15.5,F15.5)') "[get_data_1d ] get data OK, data_name = "//trim(self%my_name), minval(data), maxval(data)
+     !call put_log(trim(log_str))
   else
      write(log_str,'("  ",A)') "[get_data_1d ] get data SKIP"
      call put_log(trim(log_str))
@@ -775,9 +775,9 @@ subroutine get_data_2d(self, data, current_sec, is_get_ok)
      
      is_get_ok = .true.
 
-     write(log_str,'("  ",A,F15.5,F15.5)') "[get_data_2d ] get data OK, data_name = "//trim(self%my_name), &
-                                           minval(data(:,1:self%get_num_of_layer())), maxval(data(:,1:self%get_num_of_layer()))
-     call put_log(trim(log_str))
+     !write(log_str,'("  ",A,F15.5,F15.5)') "[get_data_2d ] get data OK, data_name = "//trim(self%my_name), &
+     !                                      minval(data(:,1:self%get_num_of_layer())), maxval(data(:,1:self%get_num_of_layer()))
+     !call put_log(trim(log_str))
   else
      write(log_str,'("  ",A)') "[get_data_2d ] get data SKIP"
      call put_log(trim(log_str))

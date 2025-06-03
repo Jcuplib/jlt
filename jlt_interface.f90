@@ -472,13 +472,14 @@ subroutine jlt_set_mapping_table(my_model_name, &
   else
      is_my_intpl = .not.is_recv_intpl
   end if
-  
+
   call set_mapping_table(trim(my_model_name), trim(send_model_name), trim(send_grid_name), &
                                               trim(recv_model_name), trim(recv_grid_name), &
                                               map_tag, is_my_intpl, send_grid, recv_grid, coef)
                                               
   call put_log("set mapping table end : "//trim(send_model_name)//":"//trim(recv_model_name),1)
 
+  
   do i = 1, get_num_of_send_data()
      if (is_my_send_data(i, send_model_name, send_grid_name, recv_model_name, recv_grid_name)) then
         call set_my_send_exchange(i, send_model_name, send_grid_name, recv_model_name, recv_grid_name)

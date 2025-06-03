@@ -2,7 +2,7 @@
 !Copyright (c) 2011, arakawa@rist.jp
 !All rights reserved.
 !
-module jlt_mpi_lib
+module jcup_mpi_lib
   use mpi
   implicit none
 
@@ -44,11 +44,10 @@ module jlt_mpi_lib
   public :: jml_ReduceMaxLocal
   public :: jml_AllReduceSum
   public :: jml_AllReduceMaxLocal
-  public :: jml_AllReduceMinLocal      ! 2015/04/28 [NEW]
+  public :: jml_AllReduceMinLocal ! 2015/04/28 [NEW]
   public :: jml_AllReduceSumLocal
-  public :: jml_BcastLocal             ! subroutine (comp_id, data, is, ie, source)
+  public :: jml_BcastLocal
   public :: jml_GatherLocal
-  public :: jml_AllGatherLocal
   public :: jml_ScatterLocal
   public :: jml_GatherVLocal
   public :: jml_ScatterVLocal
@@ -66,10 +65,8 @@ module jlt_mpi_lib
   public :: jml_IRecvLocal
   public :: jml_ISendModel
   public :: jml_IRecvModel
-  public :: jml_ISendModel2
-  public :: jml_IRecvModel2
-  public :: jml_ISendModel3
-  public :: jml_IRecvModel3
+  public :: jml_ISendModel_Compress
+  public :: jml_IRecvModel_Compress
   public :: jml_send_waitall
   public :: jml_recv_waitall
 
@@ -99,8 +96,7 @@ module jlt_mpi_lib
 !--------------------------------   private  ---------------------------------!
 
   integer, parameter, private :: MPI_MY_TAG = 0
-  integer, private            :: MPI_MAX_TAG
-  
+
   interface jml_BcastGlobal
     module procedure jml_bcast_string_global_1, jml_bcast_string_global_2
     module procedure jml_bcast_int_1d_global
@@ -172,10 +168,6 @@ module jlt_mpi_lib
     module procedure jml_gather_int_1d_local, jml_gather_real_1d_local
   end interface
 
-  interface jml_AllGatherLocal
-    module procedure jml_allgather_int_1d_local
-  end interface
-
   interface jml_ScatterLocal
     module procedure jml_scatter_int_1d_local
   end interface
@@ -245,38 +237,22 @@ module jlt_mpi_lib
 
   interface jml_ISendModel
     module procedure jml_isend_double_1d_model
-    module procedure jml_isend_double_2d_model
     module procedure jml_isend_int_1d_model
   end interface
 
   interface jml_IRecvModel
     module procedure jml_irecv_double_1d_model
-    module procedure jml_irecv_double_2d_model
     module procedure jml_irecv_int_1d_model
   end interface
 
-  interface jml_ISendModel2
-    module procedure jml_isend_double_1d_model2
-    module procedure jml_isend_double_2d_model2
-    module procedure jml_isend_int_1d_model2
+  interface jml_ISendModel_Compress
+    module procedure jml_isend_double_1d_model_compress
   end interface
 
-  interface jml_IRecvModel2
-    module procedure jml_irecv_double_1d_model2
-    module procedure jml_irecv_double_2d_model2
-    module procedure jml_irecv_int_1d_model2
+  interface jml_IRecvModel_Compress
+    module procedure jml_irecv_double_1d_model_compress
   end interface
 
-  interface jml_ISendModel3
-     module procedure jml_isend_double_1d_model3
-     module procedure jml_isend_double_2d_model3
-  end interface
-    
-  interface jml_IRecvModel3
-     module procedure jml_irecv_double_1d_model3
-     module procedure jml_irecv_double_2d_model3
-  end interface
-    
 #ifdef EXCHANGE_BY_MPI_RMA
   interface jml_WinCreateModel
     module procedure jml_win_create_double_1d_model
@@ -333,7 +309,7 @@ module jlt_mpi_lib
   integer :: buffer_count = 10      ! 10 data
   integer :: buffer_data  = 1000000 ! size of the data array sent by MPI_BSEND
   integer :: buffer_size  ! byte size of local_buffer = buffer_count*buffer_data*buffer_byte + MPI_BSEND_OVERHEAD
-  real(kind=8), pointer :: local_buffer(:) => null()
+  real(kind=8), pointer :: local_buffer(:)
 
 
   integer, private          :: isend_counter = 0
@@ -359,8 +335,6 @@ module jlt_mpi_lib
   type(mem_window_type_array), private, allocatable :: mem_windows(:,:)
 #endif
 
-  logical :: is_use_buffer = .false.
-  
 contains
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
@@ -387,10 +361,8 @@ end function jml_get_global_comm
 !=======+=========+=========+=========+=========+=========+=========+=========+
 ! 2014/08/27 [MOD] add MPI_Initialized 
 subroutine jml_init()
-  implicit none
-  logical :: is_initialized
-  logical :: flag
-  
+    implicit none
+    logical :: is_initialized
     ! MPI Initialize
     
     call MPI_initialized(is_initialized, ierror) ! 2014/08/27 [ADD]
@@ -412,24 +384,16 @@ subroutine jml_init()
    if (.not.associated(local_buffer)) then
      buffer_size  = buffer_count*buffer_data*buffer_byte + MPI_BSEND_OVERHEAD
      allocate(local_buffer(buffer_size/buffer_byte + 1))
-     if (is_use_buffer) then
-       call mpi_buffer_attach(local_buffer, buffer_byte*size(local_buffer), ierror)
-     end if
+     call mpi_buffer_attach(local_buffer, buffer_byte*size(local_buffer), ierror)
    end if
 
    isend_counter = 0
-   allocate(isend_request(10000))
-   allocate(isend_status(MPI_STATUS_SIZE, 10000))
+   allocate(isend_request(100))
+   allocate(isend_status(MPI_STATUS_SIZE, 100))
    irecv_counter = 0
-   allocate(irecv_request(10000))
-   allocate(irecv_status(MPI_STATUS_SIZE, 10000))
+   allocate(irecv_request(100))
+   allocate(irecv_status(MPI_STATUS_SIZE, 100))
 
-   call MPI_Comm_get_attr(GLOBAL_COMM, MPI_TAG_UB, MPI_MAX_TAG, flag, ierror)
-
-   if (.not.flag) then
-      MPI_MAX_TAG = 32767
-   end if
-   
 end subroutine jml_init
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
@@ -735,10 +699,7 @@ subroutine jml_finalize(is_call_finalize)
     logical :: is_finalized
     integer :: buffer_address, buffer_size
 
-    if (is_use_buffer) then
-       call mpi_buffer_detach(buffer_address, buffer_size, ierror)
-    end if
-
+    call mpi_buffer_detach(buffer_address, buffer_size, ierror)
     if (associated(local_buffer)) deallocate(local_buffer)
 
     if (.not.is_call_finalize) return
@@ -1252,6 +1213,7 @@ subroutine jml_bcast_int_1d_local(comp, data,is,ie,source)
   integer, intent(INOUT) :: data(:)
   integer, intent(IN) :: is, ie
   integer, intent(IN), optional :: source
+
   integer :: source_rank
 
   if (present(source)) then
@@ -1263,8 +1225,6 @@ subroutine jml_bcast_int_1d_local(comp, data,is,ie,source)
   call MPI_Bcast(data(is:),ie-is+1,MPI_INTEGER,source_rank,local(comp)%mpi_comm,ierror)
 
 end subroutine jml_bcast_int_1d_local
-
-!=======+=========+=========+=========+=========+=========+=========+=========+
 
 subroutine jml_bcast_int_local(comp, data,source)
   implicit none
@@ -1371,19 +1331,6 @@ subroutine jml_gather_real_1d_local(comp, data,is,ie,recv_data)
   call MPI_Gather(data(is:),ie-is+1,MPI_REAL,recv_data,ie-is+1,MPI_REAL,0,local(comp)%mpi_comm,ierror)
 
 end subroutine jml_gather_real_1d_local
-
-!=======+=========+=========+=========+=========+=========+=========+=========+
-
-subroutine jml_allgather_int_1d_local(comp, data,is,ie,recv_data)
-  implicit none
-  integer, intent(IN)  :: comp
-  integer, intent(IN)  :: data(:)
-  integer, intent(IN)  :: is, ie
-  integer, intent(OUT) :: recv_data(:)
-
-  call MPI_AllGather(data(is:),ie-is+1,MPI_INTEGER,recv_data,ie-is+1,MPI_INTEGER,local(comp)%mpi_comm,ierror)
-
-end subroutine jml_allgather_int_1d_local
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
@@ -1861,12 +1808,6 @@ function jml_ProbeLeader(source, tag) result (res)
     return
   end if
 
-  if (tag > MPI_MAX_TAG) then
-     write(0, *) "jml_ProbeLeader, tag exceeded MPI_MAX_TAG, tag = ", tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-     call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-     stop
-  end if
-  
   source_rank = leader_pe(source)
 
   call mpi_iprobe(source_rank, tag, leader%mpi_comm, res, status, ierror)
@@ -1914,7 +1855,7 @@ subroutine jml_recv_string_leader(data, source)
 
   !!write(0,*) "jml_recv_int_1d_leader ", global%my_rank, source_rank, ie-is+1
 
-  call MPI_IRECV(data,len(data),MPI_INTEGER,source_rank,MPI_MY_TAG,leader%mpi_comm,request,ierror)
+  call MPI_IRECV(data,len(data),MPI_CHARACTER,source_rank,MPI_MY_TAG,leader%mpi_comm,request,ierror)
   call MPI_WAIT(request,status,ierror)
 
 end subroutine jml_recv_string_leader
@@ -2108,14 +2049,6 @@ subroutine jml_send_real_1d_leader(data,is,ie,dest,tag)
   if (.not.jml_isLeader()) return
 
   if (present(tag)) then
-     if (tag > MPI_MAX_TAG) then
-        write(0, *) "jml_send_real_1d_leader, tag exceeded MPI_MAX_TAG, tag = ", tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-        call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-        stop
-     end if
-  end if
-  
-  if (present(tag)) then
     MPI_TAG = tag
   else
     MPI_TAG = MPI_MY_TAG
@@ -2151,14 +2084,6 @@ subroutine jml_recv_real_1d_leader(data,is,ie,source,tag)
   integer :: MPI_TAG
 
   if (.not.jml_isLeader()) return
-
-  if (present(tag)) then
-     if (tag > MPI_MAX_TAG) then
-        write(0, *) "jml_recv_real_1d_leader, tag exceeded MPI_MAX_TAG, tag = ", tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-        call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-        stop
-     end if
-  end if
 
   if (present(tag)) then
     MPI_TAG = tag
@@ -2303,14 +2228,6 @@ subroutine jml_send_double_1d_leader(data,is,ie,dest,tag)
   if (.not.jml_isLeader()) return
 
   if (present(tag)) then
-     if (tag > MPI_MAX_TAG) then
-        write(0, *) "jml_send_double_1d_leader, tag exceeded MPI_MAX_TAG, tag = ", tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-        call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-        stop
-     end if
-  end if
-
-  if (present(tag)) then
     MPI_TAG = tag
   else
     MPI_TAG = MPI_MY_TAG
@@ -2347,14 +2264,6 @@ subroutine jml_recv_double_1d_leader(data,is,ie,source,tag)
   integer :: MPI_TAG
 
   if (.not.jml_isLeader()) return
-
-  if (present(tag)) then
-     if (tag > MPI_MAX_TAG) then
-        write(0, *) "jml_recv_double_real_1d_leader, tag exceeded MPI_MAX_TAG, tag = ", tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-        call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-        stop
-     end if
-  end if
 
   if (present(tag)) then
     MPI_TAG = tag
@@ -3015,20 +2924,12 @@ end subroutine jml_set_num_of_irecv
 subroutine jml_isend_double_1d_local(comp, data,is,ie,dest_model,dest_pe, exchange_tag)
   implicit none
   integer, intent(IN) :: comp
-  real(kind=8), pointer :: data(:)
+  real(kind=8), pointer :: data
   integer, intent(IN) :: is, ie
   integer, intent(IN) :: dest_model, dest_pe
   integer, optional, intent(IN) :: exchange_tag
  
   integer :: tag
-
-  if (present(exchange_tag)) then
-     if (exchange_tag > MPI_MAX_TAG) then
-        write(0, *) "jml_isend_double_1d_local, tag exceeded MPI_MAX_TAG, tag = ", exchange_tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-        call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-        stop
-     end if
-  end if
 
   if (present(exchange_tag)) then
     tag = exchange_tag
@@ -3055,7 +2956,7 @@ end subroutine jml_isend_double_1d_local
 subroutine jml_irecv_double_1d_local(comp, data,is,ie,source_model,source_pe, exchange_tag)
   implicit none
   integer, intent(IN) :: comp
-  real(kind=8), pointer :: data(:)
+  real(kind=8), pointer :: data
   integer, intent(IN) :: is, ie
   integer, intent(IN) :: source_model, source_pe
   integer, optional, intent(IN) :: exchange_tag
@@ -3064,14 +2965,6 @@ subroutine jml_irecv_double_1d_local(comp, data,is,ie,source_model,source_pe, ex
   integer :: request
   integer :: status(MPI_STATUS_SIZE)
   
-  if (present(exchange_tag)) then
-     if (exchange_tag > MPI_MAX_TAG) then
-        write(0, *) "jml_irecv_double_1d_local, tag exceeded MPI_MAX_TAG, tag = ", exchange_tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-        call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-        stop
-     end if
-  end if
-
   if (present(exchange_tag)) then
     tag = exchange_tag
   else
@@ -3097,7 +2990,7 @@ end subroutine jml_irecv_double_1d_local
 subroutine jml_isend_double_1d_model(comp, data,is,ie,dest_model,dest_pe, exchange_tag)
   implicit none
   integer, intent(IN) :: comp
-  real(kind=8), pointer :: data(:)
+  real(kind=8), pointer :: data
   integer, intent(IN) :: is, ie
   integer, intent(IN) :: dest_model, dest_pe
   integer, optional, intent(IN) :: exchange_tag
@@ -3107,14 +3000,6 @@ subroutine jml_isend_double_1d_model(comp, data,is,ie,dest_model,dest_pe, exchan
   integer :: i
 
   !!!!!!if (is == ie) return ! 2017/02/15  ! 2019/05/27 comment out
-
-  if (present(exchange_tag)) then
-     if (exchange_tag > MPI_MAX_TAG) then
-        write(0, *) "jml_isend_double_1d_model, tag exceeded MPI_MAX_TAG, tag = ", exchange_tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-        call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-        stop
-     end if
-  end if
 
   if (present(exchange_tag)) then
     tag = exchange_tag
@@ -3147,275 +3032,10 @@ end subroutine jml_isend_double_1d_model
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine jml_isend_double_1d_model2(comp, data,is,ie,dest_model,dest_pe, exchange_tag)
-  implicit none
-  integer, intent(IN) :: comp
-  real(kind=8), pointer :: data
-  integer, intent(IN) :: is, ie
-  integer, intent(IN) :: dest_model, dest_pe
-  integer, optional, intent(IN) :: exchange_tag
-  integer :: dest_rank
-  integer :: tag
-  integer :: data_size
-  integer :: i
-
-  !!!!!!if (is == ie) return ! 2017/02/15  ! 2019/05/27 comment out
-
-  if (present(exchange_tag)) then
-     if (exchange_tag > MPI_MAX_TAG) then
-        write(0, *) "jml_isend_double_1d_model2, tag exceeded MPI_MAX_TAG, tag = ", exchange_tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-        call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-        stop
-     end if
-  end if
-
-  if (present(exchange_tag)) then
-    tag = exchange_tag
-  else 
-    tag = 0
-  end if
-
-  dest_rank = dest_pe + local(comp)%inter_comm(dest_model)%pe_offset
-  data_size = ie-is+1
-
-  if (dest_rank == jml_GetMyrankModel(comp, dest_model)) then !local(comp)%my_rank) then
-    !write(0,*) "mpi_IBsend called ", comp, dest_model, dest_pe, exchange_tag
-    call check_buffer_size(data_size)
-    call MPI_BSEND(data,data_size,MPI_DOUBLE_PRECISION,dest_rank,tag,local(comp)%inter_comm(dest_model)%mpi_comm,ierror)
-  else
-    isend_counter = isend_counter + 1
-
-    if (size(isend_request) < isend_counter) then
-      write(0, '(A,I7,A,I7)') "ERROR!!! jml_isend_double_1d_model, isend_counter = ", isend_counter, &
-                              " > size(isend_request) = ", size(isend_request)
-      call MPI_abort(MPI_COMM_WORLD, tag, ierror)
-      stop 9999
-    end if
-
-    call MPI_ISEND(data,data_size,MPI_DOUBLE_PRECISION,dest_rank,tag, &
-                   local(comp)%inter_comm(dest_model)%mpi_comm, isend_request(isend_counter),ierror)
-  end if
-
-end subroutine jml_isend_double_1d_model2
-
-!=======+=========+=========+=========+=========+=========+=========+=========+
-
-subroutine jml_isend_double_1d_model3(comp, data,is,ie,dest_model,dest_pe, exchange_tag)
-  implicit none
-  integer, intent(IN) :: comp
-  real(kind=8), intent(IN) :: data(:)
-  integer, intent(IN) :: is, ie
-  integer, intent(IN) :: dest_model, dest_pe
-  integer, optional, intent(IN) :: exchange_tag
-  integer :: dest_rank
-  integer :: tag
-  integer :: data_size
-  integer :: i
-
-  !!!!!!if (is == ie) return ! 2017/02/15  ! 2019/05/27 comment out
-
-  if (present(exchange_tag)) then
-     if (exchange_tag > MPI_MAX_TAG) then
-        write(0, *) "jml_isend_double_1d_model3, tag exceeded MPI_MAX_TAG, tag = ", exchange_tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-        call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-        stop
-     end if
-  end if
-
-  if (present(exchange_tag)) then
-    tag = exchange_tag
-  else 
-    tag = 0
-  end if
-
-  dest_rank = dest_pe + local(comp)%inter_comm(dest_model)%pe_offset
-  data_size = ie-is+1
-
-  if (dest_rank == jml_GetMyrankModel(comp, dest_model)) then !local(comp)%my_rank) then
-    !write(0,*) "mpi_IBsend called ", comp, dest_model, dest_pe, exchange_tag
-    call check_buffer_size(data_size)
-    call MPI_BSEND(data,data_size,MPI_DOUBLE_PRECISION,dest_rank,tag,local(comp)%inter_comm(dest_model)%mpi_comm,ierror)
-  else
-    isend_counter = isend_counter + 1
-
-    if (size(isend_request) < isend_counter) then
-      write(0, '(A,I7,A,I7)') "ERROR!!! jml_isend_double_1d_model, isend_counter = ", isend_counter, &
-                              " > size(isend_request) = ", size(isend_request)
-      call MPI_abort(MPI_COMM_WORLD, tag, ierror)
-      stop 9999
-    end if
-
-    call MPI_ISEND(data,data_size,MPI_DOUBLE_PRECISION,dest_rank,tag, &
-                   local(comp)%inter_comm(dest_model)%mpi_comm, isend_request(isend_counter),ierror)
-  end if
-
-end subroutine jml_isend_double_1d_model3
-
-!=======+=========+=========+=========+=========+=========+=========+=========+
-
-subroutine jml_isend_double_2d_model(comp, data,is,ie,js,je,dest_model,dest_pe, exchange_tag)
-  implicit none
-  integer, intent(IN) :: comp
-  real(kind=8), pointer :: data(:,:)
-  integer, intent(IN) :: is, ie, js, je
-  integer, intent(IN) :: dest_model, dest_pe
-  integer, optional, intent(IN) :: exchange_tag
-  integer :: dest_rank
-  integer :: tag
-  integer :: data_size
-  integer :: i
-
-  !!!!!!if (is == ie) return ! 2017/02/15  ! 2019/05/27 comment out
-
-  if (present(exchange_tag)) then
-     if (exchange_tag > MPI_MAX_TAG) then
-        write(0, *) "jml_isend_double_2d_model, tag exceeded MPI_MAX_TAG, tag = ", exchange_tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-        call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-        stop
-     end if
-  end if
-
-  if (present(exchange_tag)) then
-    tag = exchange_tag
-  else 
-    tag = 0
-  end if
-
-  dest_rank = dest_pe + local(comp)%inter_comm(dest_model)%pe_offset
-  data_size = (ie-is+1)*(je-js+1)
-
-  if (dest_rank == jml_GetMyrankModel(comp, dest_model)) then !local(comp)%my_rank) then
-    !write(0,*) "mpi_IBsend called ", comp, dest_model, dest_pe, exchange_tag
-    call check_buffer_size(data_size)
-    call MPI_BSEND(data,data_size,MPI_DOUBLE_PRECISION,dest_rank,tag,local(comp)%inter_comm(dest_model)%mpi_comm,ierror)
-  else
-    isend_counter = isend_counter + 1
-
-    if (size(isend_request) < isend_counter) then
-      write(0, '(A,I7,A,I7)') "ERROR!!! jml_isend_double_1d_model, isend_counter = ", isend_counter, &
-                              " > size(isend_request) = ", size(isend_request)
-      call MPI_abort(MPI_COMM_WORLD, tag, ierror)
-      stop 9999
-    end if
-
-    call MPI_ISEND(data,data_size,MPI_DOUBLE_PRECISION,dest_rank,tag, &
-                   local(comp)%inter_comm(dest_model)%mpi_comm, isend_request(isend_counter),ierror)
-  end if
-
-end subroutine jml_isend_double_2d_model
-
-!=======+=========+=========+=========+=========+=========+=========+=========+
-
-subroutine jml_isend_double_2d_model2(comp, data,is,ie,js,je,dest_model,dest_pe, exchange_tag)
-  implicit none
-  integer, intent(IN) :: comp
-  real(kind=8), pointer :: data
-  integer, intent(IN) :: is, ie, js, je
-  integer, intent(IN) :: dest_model, dest_pe
-  integer, optional, intent(IN) :: exchange_tag
-  integer :: dest_rank
-  integer :: tag
-  integer :: data_size
-  integer :: i
-
-  !!!!!!if (is == ie) return ! 2017/02/15  ! 2019/05/27 comment out
-
-  if (present(exchange_tag)) then
-     if (exchange_tag > MPI_MAX_TAG) then
-        write(0, *) "jml_isend_double_2d_model2, tag exceeded MPI_MAX_TAG, tag = ", exchange_tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-        call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-        stop
-     end if
-  end if
-
-  if (present(exchange_tag)) then
-    tag = exchange_tag
-  else 
-    tag = 0
-  end if
-
-  dest_rank = dest_pe + local(comp)%inter_comm(dest_model)%pe_offset
-  data_size = (ie-is+1)*(je-js+1)
-
-  if (dest_rank == jml_GetMyrankModel(comp, dest_model)) then !local(comp)%my_rank) then
-    !write(0,*) "mpi_IBsend called ", comp, dest_model, dest_pe, exchange_tag
-    call check_buffer_size(data_size)
-    call MPI_BSEND(data,data_size,MPI_DOUBLE_PRECISION,dest_rank,tag,local(comp)%inter_comm(dest_model)%mpi_comm,ierror)
-  else
-    isend_counter = isend_counter + 1
-
-    if (size(isend_request) < isend_counter) then
-      write(0, '(A,I7,A,I7)') "ERROR!!! jml_isend_double_1d_model, isend_counter = ", isend_counter, &
-                              " > size(isend_request) = ", size(isend_request)
-      call MPI_abort(MPI_COMM_WORLD, tag, ierror)
-      stop 9999
-    end if
-
-    call MPI_ISEND(data,data_size,MPI_DOUBLE_PRECISION,dest_rank,tag, &
-                   local(comp)%inter_comm(dest_model)%mpi_comm, isend_request(isend_counter),ierror)
-  end if
-
-end subroutine jml_isend_double_2d_model2
-
-!=======+=========+=========+=========+=========+=========+=========+=========+
-
-subroutine jml_isend_double_2d_model3(comp, data,is,ie,js,je,dest_model,dest_pe, exchange_tag)
-  implicit none
-  integer, intent(IN) :: comp
-  real(kind=8), intent(INOUT) :: data(:,:)
-  integer, intent(IN) :: is, ie, js, je
-  integer, intent(IN) :: dest_model, dest_pe
-  integer, optional, intent(IN) :: exchange_tag
-  integer :: dest_rank
-  integer :: tag
-  integer :: data_size
-  integer :: i
-
-  !!!!!!if (is == ie) return ! 2017/02/15  ! 2019/05/27 comment out
-
-
-  if (present(exchange_tag)) then
-     if (exchange_tag > MPI_MAX_TAG) then
-        write(0, *) "jml_isend_double_2d_model3, tag exceeded MPI_MAX_TAG, tag = ", exchange_tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-        call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-        stop
-     end if
-  end if
-
-  if (present(exchange_tag)) then
-    tag = exchange_tag
-  else 
-    tag = 0
-  end if
-
-  dest_rank = dest_pe + local(comp)%inter_comm(dest_model)%pe_offset
-  data_size = (ie-is+1)*(je-js+1)
-
-  if (dest_rank == jml_GetMyrankModel(comp, dest_model)) then !local(comp)%my_rank) then
-    call check_buffer_size(data_size)
-    call MPI_BSEND(data,data_size,MPI_DOUBLE_PRECISION,dest_rank,tag,local(comp)%inter_comm(dest_model)%mpi_comm,ierror)
-  else
-    isend_counter = isend_counter + 1
-
-    if (size(isend_request) < isend_counter) then
-      write(0, '(A,I7,A,I7)') "ERROR!!! jml_isend_double_1d_model, isend_counter = ", isend_counter, &
-                              " > size(isend_request) = ", size(isend_request)
-      call MPI_abort(MPI_COMM_WORLD, tag, ierror)
-      stop 9999
-    end if
-
-    call MPI_ISEND(data,data_size,MPI_DOUBLE_PRECISION,dest_rank,tag, &
-                   local(comp)%inter_comm(dest_model)%mpi_comm, isend_request(isend_counter),ierror)
-  end if
-
-end subroutine jml_isend_double_2d_model3
-
-!=======+=========+=========+=========+=========+=========+=========+=========+
-
 subroutine jml_isend_int_1d_model(comp, data,is,ie,dest_model,dest_pe, exchange_tag)
   implicit none
   integer, intent(IN) :: comp
-  integer, pointer :: data(:)
+  integer, pointer :: data
   integer, intent(IN) :: is, ie
   integer, intent(IN) :: dest_model, dest_pe
   integer, optional, intent(IN) :: exchange_tag
@@ -3425,14 +3045,6 @@ subroutine jml_isend_int_1d_model(comp, data,is,ie,dest_model,dest_pe, exchange_
   integer :: i
 
   !!!!!!if (is == ie) return ! 2017/02/15  ! 2019/05/27 comment out
-
-  if (present(exchange_tag)) then
-     if (exchange_tag > MPI_MAX_TAG) then
-        write(0, *) "jml_isend_int_1d_model, tag exceeded MPI_MAX_TAG, tag = ", exchange_tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-        call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-        stop
-     end if
-  end if
 
   if (present(exchange_tag)) then
     tag = exchange_tag
@@ -3465,63 +3077,10 @@ end subroutine jml_isend_int_1d_model
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine jml_isend_int_1d_model2(comp, data,is,ie,dest_model,dest_pe, exchange_tag)
-  implicit none
-  integer, intent(IN) :: comp
-  integer, pointer :: data
-  integer, intent(IN) :: is, ie
-  integer, intent(IN) :: dest_model, dest_pe
-  integer, optional, intent(IN) :: exchange_tag
-  integer :: dest_rank
-  integer :: tag
-  integer :: data_size
-  integer :: i
-
-  !!!!!!if (is == ie) return ! 2017/02/15  ! 2019/05/27 comment out
-
-  if (present(exchange_tag)) then
-     if (exchange_tag > MPI_MAX_TAG) then
-        write(0, *) "jml_isend_int_1d_model2, tag exceeded MPI_MAX_TAG, tag = ", exchange_tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-        call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-        stop
-     end if
-  end if
-
-  if (present(exchange_tag)) then
-    tag = exchange_tag
-  else 
-    tag = 0
-  end if
-
-  dest_rank = dest_pe + local(comp)%inter_comm(dest_model)%pe_offset
-  data_size = ie-is+1
-  
-  if (dest_rank == jml_GetMyrankModel(comp, dest_model)) then !local(comp)%my_rank) then
-    !write(0,*) "mpi_IBsend called ", comp, dest_model, dest_pe, exchange_tag
-    call check_buffer_size(data_size)
-    call MPI_BSEND(data,data_size,MPI_INTEGER,dest_rank,tag,local(comp)%inter_comm(dest_model)%mpi_comm,ierror)
-  else
-    isend_counter = isend_counter + 1
-
-    if (size(isend_request) < isend_counter) then
-      write(0, '(A,I7,A,I7)') "ERROR!!! jml_isend_int_1d_model, isend_counter = ", isend_counter, &
-                              " > size(isend_request) = ", size(isend_request)
-      call MPI_abort(MPI_COMM_WORLD, tag, ierror)
-      stop 9999
-    end if
-
-    call MPI_ISEND(data,data_size,MPI_INTEGER,dest_rank,tag, &
-                   local(comp)%inter_comm(dest_model)%mpi_comm, isend_request(isend_counter),ierror)
-  end if
-
-end subroutine jml_isend_int_1d_model2
-
-!=======+=========+=========+=========+=========+=========+=========+=========+
-
 subroutine jml_irecv_double_1d_model(comp, data,is,ie,source_model,source_pe, exchange_tag)
   implicit none
   integer, intent(IN) :: comp
-  real(kind=8), pointer :: data(:)
+  real(kind=8), pointer :: data
   integer, intent(IN) :: is, ie
   integer, intent(IN) :: source_model, source_pe
   integer, optional, intent(IN) :: exchange_tag
@@ -3531,14 +3090,6 @@ subroutine jml_irecv_double_1d_model(comp, data,is,ie,source_model,source_pe, ex
   integer :: status(MPI_STATUS_SIZE)
   
   !!!!!!!if (is == ie) return ! 2017/02/15 ! 2019/05/27 comment out
-
-  if (present(exchange_tag)) then
-     if (exchange_tag > MPI_MAX_TAG) then
-        write(0, *) "jml_irecv_double_1d_model, tag exceeded MPI_MAX_TAG, tag = ", exchange_tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-        call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-        stop
-     end if
-  end if
 
   if (present(exchange_tag)) then
     tag = exchange_tag
@@ -3565,254 +3116,10 @@ end subroutine jml_irecv_double_1d_model
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine jml_irecv_double_1d_model2(comp, data,is,ie,source_model,source_pe, exchange_tag)
-  implicit none
-  integer, intent(IN) :: comp
-  real(kind=8), pointer :: data
-  integer, intent(IN) :: is, ie
-  integer, intent(IN) :: source_model, source_pe
-  integer, optional, intent(IN) :: exchange_tag
-  integer :: source_rank
-  integer :: tag
-  integer :: request
-  integer :: status(MPI_STATUS_SIZE)
-  
-  !!!!!!!if (is == ie) return ! 2017/02/15 ! 2019/05/27 comment out
-
-  if (present(exchange_tag)) then
-     if (exchange_tag > MPI_MAX_TAG) then
-        write(0, *) "jml_irecv_double_1d_model2, tag exceeded MPI_MAX_TAG, tag = ", exchange_tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-        call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-        stop
-     end if
-  end if
-
-  if (present(exchange_tag)) then
-    tag = exchange_tag
-  else
-    tag = 0
-  end if
-
-  irecv_counter = irecv_counter + 1
-
-  source_rank = source_pe + local(comp)%inter_comm(source_model)%pe_offset
-
-    if (size(irecv_request) < irecv_counter) then
-      write(0, '(A,I7,A,I7)') "ERROR!!! jml_irecv_double_1d_model, irecv_counter = ", irecv_counter, &
-                              " > size(irecv_request) = ", size(irecv_request)
-      call MPI_abort(MPI_COMM_WORLD, tag, ierror)
-      stop 9999
-    end if
-
-  call MPI_IRECV(data,ie-is+1,MPI_DOUBLE_PRECISION,source_rank,tag, &
-                 local(comp)%inter_comm(source_model)%mpi_comm, irecv_request(irecv_counter),ierror)
-
-
-end subroutine jml_irecv_double_1d_model2
-
-!=======+=========+=========+=========+=========+=========+=========+=========+
-
-subroutine jml_irecv_double_1d_model3(comp, data,is,ie,source_model,source_pe, exchange_tag)
-  implicit none
-  integer, intent(IN) :: comp
-  real(kind=8), intent(INOUT) :: data(:)
-  integer, intent(IN) :: is, ie
-  integer, intent(IN) :: source_model, source_pe
-  integer, optional, intent(IN) :: exchange_tag
-  integer :: source_rank
-  integer :: tag
-  integer :: request
-  integer :: status(MPI_STATUS_SIZE)
-  
-  !!!!!!!if (is == ie) return ! 2017/02/15 ! 2019/05/27 comment out
-
-  if (present(exchange_tag)) then
-     if (exchange_tag > MPI_MAX_TAG) then
-        write(0, *) "jml_irecv_double_1d_model3, tag exceeded MPI_MAX_TAG, tag = ", exchange_tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-        call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-        stop
-     end if
-  end if
-
-  if (present(exchange_tag)) then
-    tag = exchange_tag
-  else
-    tag = 0
-  end if
-
-  irecv_counter = irecv_counter + 1
-
-  source_rank = source_pe + local(comp)%inter_comm(source_model)%pe_offset
-
-    if (size(irecv_request) < irecv_counter) then
-      write(0, '(A,I7,A,I7)') "ERROR!!! jml_irecv_double_1d_model, irecv_counter = ", irecv_counter, &
-                              " > size(irecv_request) = ", size(irecv_request)
-      call MPI_abort(MPI_COMM_WORLD, tag, ierror)
-      stop 9999
-    end if
-
-  call MPI_IRECV(data,ie-is+1,MPI_DOUBLE_PRECISION,source_rank,tag, &
-                 local(comp)%inter_comm(source_model)%mpi_comm, irecv_request(irecv_counter),ierror)
-
-
-end subroutine jml_irecv_double_1d_model3
-
-!=======+=========+=========+=========+=========+=========+=========+=========+
-
-subroutine jml_irecv_double_2d_model(comp, data,is,ie,js,je,source_model,source_pe, exchange_tag)
-  implicit none
-  integer, intent(IN) :: comp
-  real(kind=8), pointer :: data(:,:)
-  integer, intent(IN) :: is, ie, js, je
-  integer, intent(IN) :: source_model, source_pe
-  integer, optional, intent(IN) :: exchange_tag
-  integer :: source_rank
-  integer :: tag
-  integer :: data_size
-  integer :: request
-  integer :: status(MPI_STATUS_SIZE)
-  
-  !!!!!!!if (is == ie) return ! 2017/02/15 ! 2019/05/27 comment out
-
-  if (present(exchange_tag)) then
-     if (exchange_tag > MPI_MAX_TAG) then
-        write(0, *) "jml_irecv_double_2d_model, tag exceeded MPI_MAX_TAG, tag = ", exchange_tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-        call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-        stop
-     end if
-  end if
-
-  if (present(exchange_tag)) then
-    tag = exchange_tag
-  else
-    tag = 0
-  end if
-
-  irecv_counter = irecv_counter + 1
-
-  source_rank = source_pe + local(comp)%inter_comm(source_model)%pe_offset
-
-  data_size  = (ie-is+1)*(je-js+1)
-  
-    if (size(irecv_request) < irecv_counter) then
-      write(0, '(A,I7,A,I7)') "ERROR!!! jml_irecv_double_1d_model, irecv_counter = ", irecv_counter, &
-                              " > size(irecv_request) = ", size(irecv_request)
-      call MPI_abort(MPI_COMM_WORLD, tag, ierror)
-      stop 9999
-    end if
-
-  call MPI_IRECV(data,data_size,MPI_DOUBLE_PRECISION,source_rank,tag, &
-                 local(comp)%inter_comm(source_model)%mpi_comm, irecv_request(irecv_counter),ierror)
-
-
-end subroutine jml_irecv_double_2d_model
-
-!=======+=========+=========+=========+=========+=========+=========+=========+
-
-subroutine jml_irecv_double_2d_model2(comp, data,is,ie,js,je,source_model,source_pe, exchange_tag)
-  implicit none
-  integer, intent(IN) :: comp
-  real(kind=8), pointer :: data
-  integer, intent(IN) :: is, ie, js, je
-  integer, intent(IN) :: source_model, source_pe
-  integer, optional, intent(IN) :: exchange_tag
-  integer :: source_rank
-  integer :: tag
-  integer :: data_size
-  integer :: request
-  integer :: status(MPI_STATUS_SIZE)
-  
-  !!!!!!!if (is == ie) return ! 2017/02/15 ! 2019/05/27 comment out
-
-  if (present(exchange_tag)) then
-     if (exchange_tag > MPI_MAX_TAG) then
-        write(0, *) "jml_irecv_double_2d_model2, tag exceeded MPI_MAX_TAG, tag = ", exchange_tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-        call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-        stop
-     end if
-  end if
-
-  if (present(exchange_tag)) then
-    tag = exchange_tag
-  else
-    tag = 0
-  end if
-
-  irecv_counter = irecv_counter + 1
-
-  source_rank = source_pe + local(comp)%inter_comm(source_model)%pe_offset
-
-  data_size  = (ie-is+1)*(je-js+1)
-  
-    if (size(irecv_request) < irecv_counter) then
-      write(0, '(A,I7,A,I7)') "ERROR!!! jml_irecv_double_1d_model, irecv_counter = ", irecv_counter, &
-                              " > size(irecv_request) = ", size(irecv_request)
-      call MPI_abort(MPI_COMM_WORLD, tag, ierror)
-      stop 9999
-    end if
-
-  call MPI_IRECV(data,data_size,MPI_DOUBLE_PRECISION,source_rank,tag, &
-                 local(comp)%inter_comm(source_model)%mpi_comm, irecv_request(irecv_counter),ierror)
-
-
-end subroutine jml_irecv_double_2d_model2
-
-!=======+=========+=========+=========+=========+=========+=========+=========+
-
-subroutine jml_irecv_double_2d_model3(comp, data,is,ie,js,je,source_model,source_pe, exchange_tag)
-  implicit none
-  integer, intent(IN) :: comp
-  real(kind=8), intent(INOUT) :: data(:,:)
-  integer, intent(IN) :: is, ie, js, je
-  integer, intent(IN) :: source_model, source_pe
-  integer, optional, intent(IN) :: exchange_tag
-  integer :: source_rank
-  integer :: tag
-  integer :: data_size
-  integer :: request
-  integer :: status(MPI_STATUS_SIZE)
-  
-  !!!!!!!if (is == ie) return ! 2017/02/15 ! 2019/05/27 comment out
-
-  if (present(exchange_tag)) then
-     if (exchange_tag > MPI_MAX_TAG) then
-        write(0, *) "jml_irecv_double_2d_model3, tag exceeded MPI_MAX_TAG, tag = ", exchange_tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-        call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-        stop
-     end if
-  end if
-
-  if (present(exchange_tag)) then
-    tag = exchange_tag
-  else
-    tag = 0
-  end if
-
-  irecv_counter = irecv_counter + 1
-
-  source_rank = source_pe + local(comp)%inter_comm(source_model)%pe_offset
-
-  data_size  = (ie-is+1)*(je-js+1)
-  
-    if (size(irecv_request) < irecv_counter) then
-      write(0, '(A,I7,A,I7)') "ERROR!!! jml_irecv_double_1d_model, irecv_counter = ", irecv_counter, &
-                              " > size(irecv_request) = ", size(irecv_request)
-      call MPI_abort(MPI_COMM_WORLD, tag, ierror)
-      stop 9999
-    end if
-
-  call MPI_IRECV(data,data_size,MPI_DOUBLE_PRECISION,source_rank,tag, &
-                 local(comp)%inter_comm(source_model)%mpi_comm, irecv_request(irecv_counter),ierror)
-
-
-end subroutine jml_irecv_double_2d_model3
-
-!=======+=========+=========+=========+=========+=========+=========+=========+
-
 subroutine jml_irecv_int_1d_model(comp, data,is,ie,source_model,source_pe, exchange_tag)
   implicit none
   integer, intent(IN) :: comp
-  integer, pointer :: data(:)
+  integer, pointer :: data
   integer, intent(IN) :: is, ie
   integer, intent(IN) :: source_model, source_pe
   integer, optional, intent(IN) :: exchange_tag
@@ -3822,14 +3129,6 @@ subroutine jml_irecv_int_1d_model(comp, data,is,ie,source_model,source_pe, excha
   integer :: status(MPI_STATUS_SIZE)
   
   !!!!!!!if (is == ie) return ! 2017/02/15 ! 2019/05/27 comment out
-
-  if (present(exchange_tag)) then
-     if (exchange_tag > MPI_MAX_TAG) then
-        write(0, *) "jml_irecv_int_1d_model, tag exceeded MPI_MAX_TAG, tag = ", exchange_tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-        call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-        stop
-     end if
-  end if
 
   if (present(exchange_tag)) then
     tag = exchange_tag
@@ -3853,13 +3152,79 @@ subroutine jml_irecv_int_1d_model(comp, data,is,ie,source_model,source_pe, excha
 
 end subroutine jml_irecv_int_1d_model
 
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+subroutine jml_isend_double_1d_model_compress(comp, data,is,ie,dest_model,dest_pe, exchange_tag)
+  use jcup_zlib, only : compress_array
+  implicit none
+  integer, intent(IN) :: comp
+  real(kind=8), pointer :: data(:)
+  integer, intent(IN) :: is, ie
+  integer, intent(IN) :: dest_model, dest_pe
+  integer, optional, intent(IN) :: exchange_tag
+  integer :: dest_rank
+  integer :: tag
+  integer :: data_size
+  integer :: in_size, out_size
+  character, pointer :: out_array(:)
+  integer :: send_array(2)
+  integer :: i
+
+  !!!!!!if (is == ie) return ! 2017/02/15  ! 2019/05/27 comment out
+
+  if (present(exchange_tag)) then
+    tag = exchange_tag
+  else 
+    tag = 0
+  end if
+
+  dest_rank = dest_pe + local(comp)%inter_comm(dest_model)%pe_offset
+  data_size = ie-is+1
+
+  if (dest_rank == jml_GetMyrankModel(comp, dest_model)) then !local(comp)%my_rank) then
+    !write(0,*) "mpi_IBsend called ", comp, dest_model, dest_pe, exchange_tag
+    call check_buffer_size(data_size)
+    call MPI_BSEND(data,data_size,MPI_DOUBLE_PRECISION,dest_rank,tag,local(comp)%inter_comm(dest_model)%mpi_comm,ierror)
+  else
+    isend_counter = isend_counter + 1
+
+    if (size(isend_request) < isend_counter) then
+      write(0, '(A,I7,A,I7)') "ERROR!!! jml_isend_double_1d_model, isend_counter = ", isend_counter, &
+                              " > size(isend_request) = ", size(isend_request)
+      call MPI_abort(MPI_COMM_WORLD, tag, ierror)
+      stop 9999
+    end if
+
+    in_size = data_size
+    out_size = int(in_size * 1.2 * 8 + 12)  ! double to byte
+    allocate(out_array(out_size))
+
+    call compress_array(data, in_size, out_array, out_size)
+
+    send_array(1) = in_size    ! original   array size
+    send_array(2) = out_size   ! compressed array size
+
+    call jml_send_int_1d_model(comp, send_array, 1, 2, dest_model, dest_pe)
+    !write(0, *) "send array = ", send_array
+    
+    call jml_send_char_1d_model(comp, out_array, 1, out_size, dest_model, dest_pe)
+    
+    !call MPI_ISEND(out_array, out_size, MPI_CHARACTER,dest_rank,tag, &
+    !               local(comp)%inter_comm(dest_model)%mpi_comm, isend_request(isend_counter),ierror)
+
+    deallocate(out_array)
+    
+ end if
+
+end subroutine jml_isend_double_1d_model_compress
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine jml_irecv_int_1d_model2(comp, data,is,ie,source_model,source_pe, exchange_tag)
+subroutine jml_irecv_double_1d_model_compress(comp, data,is,ie,source_model,source_pe, exchange_tag)
+  use jcup_zlib, only : uncompress_array
   implicit none
   integer, intent(IN) :: comp
-  integer, pointer :: data
+  real(kind=8), pointer :: data(:)
   integer, intent(IN) :: is, ie
   integer, intent(IN) :: source_model, source_pe
   integer, optional, intent(IN) :: exchange_tag
@@ -3867,16 +3232,12 @@ subroutine jml_irecv_int_1d_model2(comp, data,is,ie,source_model,source_pe, exch
   integer :: tag
   integer :: request
   integer :: status(MPI_STATUS_SIZE)
+  integer :: in_size
+  integer :: out_size
+  integer :: recv_array(2)
+  character, pointer :: in_array(:)
   
   !!!!!!!if (is == ie) return ! 2017/02/15 ! 2019/05/27 comment out
-
-  if (present(exchange_tag)) then
-     if (exchange_tag > MPI_MAX_TAG) then
-        write(0, *) "jml_irecv_int_1d_model2, tag exceeded MPI_MAX_TAG, tag = ", exchange_tag, ", MPI_MAX_TAG = ", MPI_MAX_TAG
-        call mpi_abort(MPI_COMM_WORLD, ierror, ierror)
-        stop
-     end if
-  end if
 
   if (present(exchange_tag)) then
     tag = exchange_tag
@@ -3888,19 +3249,32 @@ subroutine jml_irecv_int_1d_model2(comp, data,is,ie,source_model,source_pe, exch
 
   source_rank = source_pe + local(comp)%inter_comm(source_model)%pe_offset
 
-  if (size(irecv_request) < irecv_counter) then
-      write(0, '(A,I7,A,I7)') "ERROR!!! jml_irecv_int_1d_model, irecv_counter = ", irecv_counter, &
-                  " > size(irecv_request) = ", size(irecv_request)
+    if (size(irecv_request) < irecv_counter) then
+      write(0, '(A,I7,A,I7)') "ERROR!!! jml_irecv_double_1d_model, irecv_counter = ", irecv_counter, &
+                              " > size(irecv_request) = ", size(irecv_request)
       call MPI_abort(MPI_COMM_WORLD, tag, ierror)
       stop 9999
     end if
 
+  call jml_recv_int_1d_model(comp, recv_array, 1, 2, source_model, source_pe)
+
+  in_size  = recv_array(2)  ! compressed array size
+  out_size = recv_array(1)  ! original   array size
+
+  !write(0, *) "recv array = ", recv_array
   
-  call MPI_IRECV(data,ie-is+1,MPI_INTEGER,source_rank,tag, &
-                 local(comp)%inter_comm(source_model)%mpi_comm, irecv_request(irecv_counter),ierror)
+  allocate(in_array(in_size))
 
-end subroutine jml_irecv_int_1d_model2
+  call jml_recv_char_1d_model(comp, in_array, 1, in_size, source_model, source_pe)
+  
+  !call MPI_IRECV(in_array, in_size, MPI_CHARACTER, source_rank, tag, &
+  !               local(comp)%inter_comm(source_model)%mpi_comm, irecv_request(irecv_counter),ierror)
 
+  call uncompress_array(in_array, in_size, data, out_size)
+
+  deallocate(in_array)
+  
+end subroutine jml_irecv_double_1d_model_compress
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
@@ -3918,7 +3292,6 @@ end subroutine jml_send_waitall
 
 subroutine jml_recv_waitall()
   implicit none
-  integer :: i
   
   if (irecv_counter==0) return
   call mpi_WaitAll(irecv_counter, irecv_request, irecv_status, ierror)
@@ -4283,22 +3656,27 @@ subroutine check_buffer_size(bsize)
   integer :: detach_size
 
   if (bsize > buffer_data) then
-     if (is_use_buffer) then
-         call mpi_buffer_detach(buffer_ptr, detach_size, ierror)
-     end if
-      
+     call mpi_buffer_detach(buffer_ptr, detach_size, ierror)
      buffer_data = bsize
      buffer_size  = buffer_count*buffer_data*buffer_byte + MPI_BSEND_OVERHEAD
      deallocate(local_buffer, STAT = ierror)
      allocate(local_buffer(buffer_size/buffer_byte + 1))
-     if (is_use_buffer) then
-        call mpi_buffer_attach(local_buffer, buffer_byte*size(local_buffer), ierror)
-     end if
+     call mpi_buffer_attach(local_buffer, buffer_byte*size(local_buffer), ierror)
   end if
   
+  !if (bsize>buffer_size) then
+  !  call mpi_buffer_detach(local_buffer, 8*size(local_buffer), ierror)
+
+  !  deallocate(local_buffer, STAT = ierror)
+
+  !  allocate(local_buffer(bsize*2))
+  !  call mpi_buffer_attach(local_buffer, 8*size(local_buffer*2), ierror)
+  !  buffer_size = bsize
+  !end if
+
 end subroutine check_buffer_size
 
 
 
-end module jlt_mpi_lib
+end module jcup_mpi_lib
 
