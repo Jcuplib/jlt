@@ -236,5 +236,21 @@ Routines
  
 Detail
  MPI通信でtagが制限値を上回らないようにtagの計算を修正。
+
+-----------------------------------------------------------------
+
+Version:0.020900
+Date:2025/06/04
+
+Files: jlt_exchange_class.f90
+
+Routines
+ set_mapping_table_recv_intpl : [mod]
+ sort_conversion_table        : [mod]
+ reorder_conversion_table     : [add]
+ resort_conversion_table      : [add]
+ 
+Detail
+ 受信側補間で領域分割が変わっても計算順序が変わらないように修正。
  
 

@@ -448,7 +448,17 @@ subroutine set_mapping_table_recv_intpl(self, send_comp_name, send_grid_name, re
     call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 7")
     call make_conversion_table(self%recv_grid_index, self%my_map%intpled_index, self%recv_conv_table)
 
-    call sort_conversion_table(self%send_conv_table, self%recv_conv_table, self%coef) ! add 20250518
+    call sort_conversion_table(self%send_grid_index, self%send_conv_table, self%recv_grid_index, self%recv_conv_table, self%coef) ! add 20250518/mdf 20250604
+    call reorder_conversion_table(self%send_grid_index, self%send_conv_table, self%recv_conv_table, self%coef) ! add 20250604
+    
+    
+    do i = 1, size(self%recv_grid_index)
+       write(600, *) self%recv_grid_index(i), self%send_grid_index(i)
+    end do
+    
+    do i = 1, size(self%recv_conv_table)
+       write(600, *) self%recv_conv_table(i), self%send_conv_table(i), self%coef(i)
+    end do
     
     call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 8")
   end if
@@ -724,11 +734,13 @@ subroutine recv_send_grid_index(self)
 end subroutine recv_send_grid_index
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
-
-subroutine sort_conversion_table(send_conv_table, recv_conv_table, coef)
+!Sort other tables using the values in the recv_conv_table as keys.
+subroutine sort_conversion_table(send_index_table, send_conv_table, recv_index_table, recv_conv_table, coef)
   use jlt_utils, only : sort_int_1d, binary_search
   implicit none
+  integer, pointer :: send_index_table(:)
   integer, pointer :: send_conv_table(:)
+  integer, pointer :: recv_index_table(:)
   integer, pointer :: recv_conv_table(:)
   real(kind=8), pointer :: coef(:)
   integer, allocatable :: sorted_index(:), sorted_pos(:)
@@ -755,6 +767,18 @@ subroutine sort_conversion_table(send_conv_table, recv_conv_table, coef)
      send_conv_table(i) = sorted_index(sorted_pos(i))
   end do
 
+  sorted_index(:) = send_index_table(:)
+
+  do i = 1, size(recv_conv_table)
+     send_index_table(i) = sorted_index(sorted_pos(i))
+  end do
+
+  sorted_index(:) = recv_index_table(:)
+
+  do i = 1, size(recv_conv_table)
+     recv_index_table(i) = sorted_index(sorted_pos(i))
+  end do
+
   allocate(double_temp(size(recv_conv_table)))
 
   double_temp(:) = coef(:)
@@ -765,6 +789,87 @@ subroutine sort_conversion_table(send_conv_table, recv_conv_table, coef)
   deallocate(sorted_index, sorted_pos, double_temp)     
 
 end subroutine sort_conversion_table
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+!For computations on identical grid points on the recv_conv_table (which are already sorted),
+!sort other tables based on the global grid point indices on the sending side (send_index_table).
+subroutine reorder_conversion_table(send_index_table, send_conv_table, recv_conv_table, coef)
+  implicit none
+  integer, pointer :: send_index_table(:)
+  integer, pointer :: send_conv_table(:)
+  integer, pointer :: recv_conv_table(:)
+  real(kind=8), pointer :: coef(:)
+  integer, pointer :: send_index_ptr(:)
+  integer, pointer :: send_conv_ptr(:)
+  real(kind=8), pointer :: coef_ptr(:)
+
+  integer :: current_index
+  integer :: index_counter
+  integer :: i
+
+  current_index = recv_conv_table(1)
+  index_counter = 0
+  do i = 2, size(recv_conv_table)
+     if (current_index /= recv_conv_table(i)) then
+        send_index_ptr => send_index_table(i-1-index_counter:i-1)
+        send_conv_ptr => send_conv_table(i-1-index_counter:i-1)
+        coef_ptr => coef(i-1-index_counter:i-1)
+        call resort_conversion_table(send_index_ptr, send_conv_ptr, coef_ptr)
+        current_index = recv_conv_table(i)
+        index_counter = 0
+     else
+        index_counter = index_counter + 1
+     end if
+  end do
+
+  i = size(recv_conv_table)
+  if (index_counter > 0) then
+        send_index_ptr => send_index_table(i-index_counter:i)
+        send_conv_ptr => send_conv_table(i-index_counter:i)
+        coef_ptr => coef(i-index_counter:i)
+        call resort_conversion_table(send_index_ptr, send_conv_ptr, coef_ptr)
+  end if
+     
+end subroutine reorder_conversion_table
+
+subroutine resort_conversion_table(send_index, send_conv, coef)
+  use jlt_utils, only : sort_int_1d, binary_search
+  implicit none
+  integer, pointer :: send_index(:)
+  integer, pointer :: send_conv(:)
+  real(kind=8), pointer :: coef(:)
+  integer, allocatable :: sorted_index(:), sorted_pos(:)
+  real(kind=8), allocatable :: double_temp(:)
+  integer :: i
+
+  write(0, *) "resort_conversion_table ", send_index, send_conv
+  
+  allocate(sorted_index(size(send_index)))
+  allocate(sorted_pos(size(send_index)))
+
+  do i = 1, size(send_index)
+     sorted_index(i) = send_index(i)
+     sorted_pos(i)   = i
+  end do
+  
+  call sort_int_1d(size(send_index), sorted_index, sorted_pos)
+
+  sorted_index(:) = send_conv(:)
+
+  do i = 1, size(send_index)
+     send_conv(i) = sorted_index(sorted_pos(i))
+  end do
+
+  allocate(double_temp(size(send_index)))
+
+  double_temp(:) = coef(:)
+  do i = 1, size(send_index)
+     coef(i) = double_temp(sorted_pos(i))
+  end do
+  
+  deallocate(sorted_index, sorted_pos, double_temp)     
+  
+end subroutine resort_conversion_table
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
