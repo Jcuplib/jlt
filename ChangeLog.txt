@@ -252,5 +252,22 @@ Routines
  
 Detail
  受信側補間で領域分割が変わっても計算順序が変わらないように修正。
+
+-----------------------------------------------------------------
+
+Version:0.021000
+Date:2025/06/07
+
+Files: jlt_exchange_class.f90
+
+Routines
+ set_mapping_table_send_intpl : [mod]
+ sort_conversion_table        : [mod]
+ reorder_conversion_table     : [add]
+ resort_conversion_table      : [add]
+ 
+Detail
+ 送信側も受信側と同じ補間計算順序になるようsort_conversion_table, reorder_conversion_tableのコールを追加。
+ 
  
 

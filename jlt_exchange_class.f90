@@ -287,6 +287,8 @@ subroutine set_mapping_table_send_intpl(self, send_comp_name, send_grid_name, re
     !call make_conversion_table(self%recv_grid_index, self%my_map%intpled_index, self%recv_conv_table)
     !call recv_recv_grid_index(self)
     !call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 3")
+    call sort_conversion_table(self%send_grid_index, self%send_conv_table, self%recv_grid_index, self%recv_conv_table, self%coef) ! add 202506-7
+    call reorder_conversion_table(self%send_grid_index, self%send_conv_table, self%recv_conv_table, self%coef) ! add 20250607
   else
     call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 4")
     call make_recv_map_info(self%ex_map%exchange_index, self%my_map)
@@ -450,15 +452,6 @@ subroutine set_mapping_table_recv_intpl(self, send_comp_name, send_grid_name, re
 
     call sort_conversion_table(self%send_grid_index, self%send_conv_table, self%recv_grid_index, self%recv_conv_table, self%coef) ! add 20250518/mdf 20250604
     call reorder_conversion_table(self%send_grid_index, self%send_conv_table, self%recv_conv_table, self%coef) ! add 20250604
-    
-    
-    do i = 1, size(self%recv_grid_index)
-       write(600, *) self%recv_grid_index(i), self%send_grid_index(i)
-    end do
-    
-    do i = 1, size(self%recv_conv_table)
-       write(600, *) self%recv_conv_table(i), self%send_conv_table(i), self%coef(i)
-    end do
     
     call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 8")
   end if
@@ -842,8 +835,6 @@ subroutine resort_conversion_table(send_index, send_conv, coef)
   real(kind=8), allocatable :: double_temp(:)
   integer :: i
 
-  write(0, *) "resort_conversion_table ", send_index, send_conv
-  
   allocate(sorted_index(size(send_index)))
   allocate(sorted_pos(size(send_index)))
 
@@ -1521,7 +1512,11 @@ subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag)
   write(log_str,'("  ",A,I5)') "[interpolate_data] interpolate data START, intpl_tag = ", intpl_tag
   call put_log(trim(log_str))
 
-  my_grid => get_grid_ptr(trim(self%recv_grid_name))
+  if (trim(self%my_name) == trim(self%send_comp_name)) then ! send intepolation
+     my_grid => get_grid_ptr(trim(self%send_grid_name))
+  else
+     my_grid => get_grid_ptr(trim(self%recv_grid_name))
+  end if
   
   recv_data(:,:) = 0.d0
 
