@@ -39,6 +39,13 @@ module jlt_exchange_class
      integer, pointer              :: intpled_index(:)     ! interpolation data index
      integer, pointer              :: conv_table(:)        ! conversion table from interpolated data array to grid array 
   end type recv_map_info
+
+  type conv_table_2d
+     integer                       :: table_size
+     integer, pointer              :: send_conv_table(:)
+     integer, pointer              :: recv_conv_table(:)
+     real(kind=8), pointer         :: coef(:)
+  end type conv_table_2d
   
   type exchange_class
      private
@@ -56,10 +63,13 @@ module jlt_exchange_class
      integer, pointer              :: recv_grid_index(:)   ! local index
      real(kind=8), pointer         :: coef(:)              ! local coef
      integer, pointer              :: target_rank(:)       ! local target rank
-     ! array conversion table for interpolation (valid only recv side)
+     ! array of conversion table for interpolation 
      integer, pointer              :: send_conv_table(:)   ! conv. table from interpolation index to send grid index
      integer, pointer              :: recv_conv_table(:)   ! conv. table from interpolation index to recv grid index
 
+     ! array of conversion table for 2d parallel interpolation
+     type(conv_table_2d), pointer  :: conv_table(:)
+     
      type(exchange_map_info)       :: ex_map
      type(send_map_info)           :: send_map             ! varid for send side interpolation
      type(recv_map_info)           :: my_map
@@ -287,9 +297,12 @@ subroutine set_mapping_table_send_intpl(self, send_comp_name, send_grid_name, re
     !call make_conversion_table(self%recv_grid_index, self%my_map%intpled_index, self%recv_conv_table)
     !call recv_recv_grid_index(self)
     !call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 3")
-    call sort_conversion_table(self%send_grid_index, self%send_conv_table, self%recv_grid_index, self%recv_conv_table, self%coef) ! add 202506-7
+    call sort_conversion_table(self%send_grid_index, self%send_conv_table, self%recv_grid_index, self%recv_conv_table, self%coef) ! add 20250607
     call reorder_conversion_table(self%send_grid_index, self%send_conv_table, self%recv_conv_table, self%coef) ! add 20250607
-  else
+
+    call make_parallel_interpolation_table(self%send_conv_table, self%recv_conv_table, self%coef, self%conv_table) ! add 20250608
+    
+ else
     call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 4")
     call make_recv_map_info(self%ex_map%exchange_index, self%my_map)
     call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 5")
@@ -384,10 +397,7 @@ subroutine set_mapping_table_recv_intpl(self, send_comp_name, send_grid_name, re
      call get_target_grid_rank(send_comp_name, send_grid_name, self%send_grid_index, self%target_rank)
   end if
 
-
-  
   call put_log("jlt_exchange_class : set_mapping_table, make_local_mapping_table  end")
-
 
   !write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "global mapping table"
   !write(300+source_comp_id*100 + my_grid%get_my_rank(), *) "send_comp = "//trim(send_comp_name)//", recv_comp = "//trim(recv_comp_name)
@@ -453,6 +463,8 @@ subroutine set_mapping_table_recv_intpl(self, send_comp_name, send_grid_name, re
     call sort_conversion_table(self%send_grid_index, self%send_conv_table, self%recv_grid_index, self%recv_conv_table, self%coef) ! add 20250518/mdf 20250604
     call reorder_conversion_table(self%send_grid_index, self%send_conv_table, self%recv_conv_table, self%coef) ! add 20250604
     
+    call make_parallel_interpolation_table(self%send_conv_table, self%recv_conv_table, self%coef, self%conv_table) ! add 20250608
+
     call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 8")
   end if
 
@@ -825,6 +837,8 @@ subroutine reorder_conversion_table(send_index_table, send_conv_table, recv_conv
      
 end subroutine reorder_conversion_table
 
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
 subroutine resort_conversion_table(send_index, send_conv, coef)
   use jlt_utils, only : sort_int_1d, binary_search
   implicit none
@@ -861,6 +875,96 @@ subroutine resort_conversion_table(send_index, send_conv, coef)
   deallocate(sorted_index, sorted_pos, double_temp)     
   
 end subroutine resort_conversion_table
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+!   1, 1, 1, 1, 2, 2, 4, 4, 4, 6
+!   
+!   1, 2, 4, 6
+!   1, 2, 4
+!   1, 4
+!   1
+
+subroutine make_parallel_interpolation_table(send_1d, recv_1d, coef_1d, conv_table)
+  implicit none
+  integer, intent(IN)          :: send_1d(:)
+  integer, intent(IN)          :: recv_1d(:)
+  real(kind=8), intent(IN)     :: coef_1d(:)
+  type(conv_table_2d), pointer :: conv_table(:)
+
+  integer, allocatable :: parallel_index(:,:)
+  integer, allocatable :: index_pointer(:)
+  
+  integer :: num_of_operation ! 
+  integer :: current_index
+  integer :: diff_num_counter
+  integer :: same_num_counter
+  integer :: same_counter
+  integer :: counter
+  integer :: i, j
+  
+  num_of_operation  = size(recv_1d)
+  current_index     = recv_1d(1)
+  same_counter      = 1
+  same_num_counter  = 1
+  diff_num_counter  = 1
+  
+  do i = 2, num_of_operation
+     if (current_index == recv_1d(i)) then
+        same_counter = same_counter + 1
+        same_num_counter = max(same_num_counter, same_counter)
+     else
+        same_counter = 1
+        diff_num_counter = diff_num_counter + 1
+     end if
+     current_index = recv_1d(i)
+  end do
+
+  allocate(parallel_index(diff_num_counter, same_num_counter))
+  allocate(index_pointer(same_num_counter))
+
+  parallel_index(:,:) = -255
+  index_pointer(:) = 0
+  
+  parallel_index(1,1) = 1
+  index_pointer(1)    = 1
+  current_index       = recv_1d(1)
+  same_counter        = 1
+  same_num_counter    = 1
+  diff_num_counter    = 1
+  
+  do i = 2, num_of_operation
+     if (current_index == recv_1d(i)) then
+        same_counter = same_counter + 1
+     else
+        same_counter = 1
+        diff_num_counter = diff_num_counter + 1
+     end if
+     index_pointer(same_counter) = index_pointer(same_counter) + 1
+     parallel_index(index_pointer(same_counter) , same_counter) = i
+     current_index = recv_1d(i)
+  end do
+
+  allocate(conv_table(size(parallel_index, 2)))
+
+  do i = 1, size(parallel_index, 2)
+     conv_table(i)%table_size = index_pointer(i)
+     allocate(conv_table(i)%send_conv_table(index_pointer(i)))
+     allocate(conv_table(i)%recv_conv_table(index_pointer(i)))
+     allocate(conv_table(i)%coef(index_pointer(i)))
+  end do
+
+  do j = 1, size(conv_table)
+     do i = 1, index_pointer(j)
+        conv_table(j)%send_conv_table(i) = send_1d(parallel_index(i, j))
+        conv_table(j)%recv_conv_table(i) = recv_1d(parallel_index(i, j))
+        conv_table(j)%coef(i)            = coef_1d(parallel_index(i, j))
+     end do
+  end do
+
+  deallocate(parallel_index)
+  deallocate(index_pointer)
+  
+end subroutine make_parallel_interpolation_table
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
@@ -1486,7 +1590,7 @@ end subroutine buffer_2_recv_data
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag)
+subroutine interpolate_data_org(self, send_data, recv_data, num_of_layer, intpl_tag)
   use jlt_grid, only : get_grid_ptr
   use jlt_utils, only : put_log
   use mpi
@@ -1574,6 +1678,115 @@ subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag)
          end if
          !!write(my_rank+300, *) i, send_index(i), recv_index(i), send_data(send_index(i),k), recv_data(recv_index(i),k), self%coef(i)
          !write(300+self%recv_comp_id*100 + my_grid%get_my_rank(), *) i, send_index(i), recv_index(i), send_data(send_index(i),k), recv_data(recv_index(i),k), self%coef(i)
+      end do
+    end do
+ end if
+ 
+  write(log_str,'("  ",A,I5)') "[interpolate_data] interpolate data END"
+  call put_log(trim(log_str))
+
+  !write(0, *) "interpolate_data min, max = ", minval(send_data), maxval(send_data), minval(recv_data), maxval(recv_data)
+end subroutine interpolate_data_org
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag)
+  use jlt_grid, only : get_grid_ptr
+  use jlt_utils, only : put_log
+  use mpi
+  implicit none
+  class(exchange_class)       :: self
+  real(kind=8), intent(IN)    :: send_data(:,:)
+  real(kind=8), intent(INOUT) :: recv_data(:,:)
+  integer, intent(IN)         :: num_of_layer
+  integer, intent(IN)         :: intpl_tag
+  integer, pointer            :: send_index(:), recv_index(:)
+  integer                     :: send_grid
+  integer                     :: recv_grid
+  real(kind=8), allocatable   :: weight_data(:)
+  integer, allocatable        :: check_data(:)
+  real(kind=8) :: missing_value
+  integer :: i, j, k, n
+  type(grid_class), pointer   :: my_grid
+  character(len=STR_MID)      :: log_str
+  integer :: my_rank
+
+  call MPI_comm_rank(MPI_COMM_WORLD, my_rank, i)
+  
+  write(log_str,'("  ",A,I5)') "[interpolate_data] interpolate data START, intpl_tag = ", intpl_tag
+  call put_log(trim(log_str))
+
+  if (trim(self%my_name) == trim(self%send_comp_name)) then ! send intepolation
+     my_grid => get_grid_ptr(trim(self%send_grid_name))
+  else
+     my_grid => get_grid_ptr(trim(self%recv_grid_name))
+  end if
+  
+  recv_data(:,:) = 0.d0
+
+  send_index => self%send_conv_table
+  recv_index => self%recv_conv_table
+  
+  !write(300+self%recv_comp_id*100 + my_grid%get_my_rank(), *) "interpolate_data ", num_of_layer, self%my_map%get_intpl_size(), size(recv_index), size(send_index)
+  !write(300+self%recv_comp_id*100 + my_grid%get_my_rank(), *) "interpolate_data ", size(recv_data, 1), size(send_data,1), minval(send_index), maxval(send_index),&
+   !                                minval(recv_index), maxval(recv_index), minval(self%coef), maxval(self%coef)
+
+  if (intpl_tag > 9800) then
+      if ((10000 >= intpl_tag).and.(intpl_tag > 9900)) then
+         missing_value = -999.d0
+      else if ((9900 >= intpl_tag).and.(intpl_tag > 9800)) then
+         missing_value = -1.d0
+      endif
+
+      allocate(weight_data(size(recv_data(:,1))))
+      allocate(check_data(size(recv_data(:,1))))
+      do n = 1, num_of_layer
+        weight_data(:) = 0.d0
+        check_data(:) = 0
+        do j = 1, size(senf%conv_table)
+           send_index => self%conv_table(j)%send_conv_table
+           recv_index => senf%conv_table(j)%recv_conv_table
+           
+          do i = 1, size(self%conv_table(j)%coef)
+             send_grid = send_index(i)
+             recv_grid = recv_index(i)
+             if (send_data(send_grid, n) == missing_value) then
+                check_data(recv_grid) = 1
+             else
+                recv_data(recv_grid, n) = recv_data(recv_grid, n) + send_data(send_grid, n)*self%coef(i)
+                weight_data(recv_grid) = weight_data(recv_grid) + self%coef(i)
+             end if
+          end do
+        end do
+        do i = 1, size(recv_data(:,1))
+           if (weight_data(i) > 0.d0) then
+              recv_data(i, n) = recv_data(i, n) / weight_data(i)
+           else if (check_data(i) == 1) then
+              recv_data(i, n) = missing_value
+           end if
+        end do
+      end do
+
+      deallocate(weight_data)
+      deallocate(check_data)
+  else ! scalar data
+    !write(300+self%recv_comp_id*100 + my_grid%get_my_rank(), *) "interpolation"
+         !if (intpl_tag == 14) then
+         !write(300+my_grid%get_my_rank(), *) "interpolate_data test write"
+         !write(300+my_grid%get_my_rank(), *) size(self%coef)
+         !end if
+    do k = 1, num_of_layer
+       do j = 1, size(self%conv_table)
+          send_index => self%conv_table(j)%send_conv_table
+          recv_index => self%conv_table(j)%recv_conv_table
+          do i = 1, size(self%conv_table(j)%coef)
+             recv_data(recv_index(i),k) = recv_data(recv_index(i),k) + send_data(send_index(i),k)*self%conv_table(j)%coef(i)
+         !if (intpl_tag == 14) then
+         !write(300+my_grid%get_my_rank(), *) i, send_index(i), recv_index(i), send_data(send_index(i),k), recv_data(recv_index(i),k), self%coef(i)
+         !end if
+         !!write(my_rank+300, *) i, send_index(i), recv_index(i), send_data(send_index(i),k), recv_data(recv_index(i),k), self%coef(i)
+             !write(300+self%recv_comp_id*100 + my_grid%get_my_rank(), *) i, send_index(i), recv_index(i), send_data(send_index(i),k), recv_data(recv_index(i),k), self%coef(i)
+          end do
       end do
     end do
  end if

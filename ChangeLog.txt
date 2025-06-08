@@ -262,12 +262,26 @@ Files: jlt_exchange_class.f90
 
 Routines
  set_mapping_table_send_intpl : [mod]
- sort_conversion_table        : [mod]
- reorder_conversion_table     : [add]
- resort_conversion_table      : [add]
  
 Detail
- 送信側も受信側と同じ補間計算順序になるようsort_conversion_table, reorder_conversion_tableのコールを追加。
+ 送信側補間も受信側補間と同じ補間計算順序になるようsort_conversion_table, reorder_conversion_tableのコールを追加。
+ 
+-----------------------------------------------------------------
+
+Version:0.021100
+Date:2025/06/08
+
+Files: jlt_exchange_class.f90
+
+Routines
+ set_mapping_table_send_intpl : [mod]
+ set_mapping_table_recv_intpl : [mod]
+ make_parallel_interpolation_table : [add]
+ inteterpolate_data           : [mod]
+ 
+Detail
+ 補間計算をスレッド並列できるようにconv_tableを2次元化し、interpolate_dataも2次元化した。
+ 
  
  
 
