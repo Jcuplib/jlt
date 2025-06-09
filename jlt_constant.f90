@@ -85,4 +85,9 @@ module jlt_constant
 
   integer,parameter,public :: DEBUG_FILE_ID = 800
 
+  ! interpolation mode setting 20250609
+  integer,parameter,public :: INTPL_SERIAL_FAST = 1    ! serial and domain dependent mode
+  integer,parameter,public :: INTPL_SERIAL_SAFE = 2    ! serian and domain independent mode (default)
+  integer,parameter,public :: INTPL_PARALLEL    = 3    ! thread parallel mode
+  
 end module jlt_constant

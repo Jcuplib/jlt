@@ -1,5 +1,6 @@
 module jlt_exchange_class
   use jlt_constant, only   : STR_SHORT, STR_MID, STR_LONG
+  use jlt_constant, only   : INTPL_SERIAL_FAST, INTPL_SERIAL_SAFE, INTPL_PARALLEL
   use jlt_grid_class, only : grid_class
   implicit none
   private
@@ -71,11 +72,11 @@ module jlt_exchange_class
      type(conv_table_2d), pointer  :: conv_table(:)
      
      type(exchange_map_info)       :: ex_map
-     type(send_map_info)           :: send_map             ! varid for send side interpolation
+     type(send_map_info)           :: send_map                        ! varid for send side interpolation
      type(recv_map_info)           :: my_map
      
-     logical                       :: intpl_flag = .false.  ! my interpolation or not
-
+     logical                       :: intpl_flag = .false.            ! my interpolation or not
+     integer                       :: intpl_mode = INTPL_SERIAL_SAFE  ! 
      
    contains
      procedure :: set_mapping_table         ! subroutine (send_comp, send_grid, recv_comp, recv_grid, map_tag, send_index, recv_index, coef)
@@ -96,7 +97,7 @@ module jlt_exchange_class
      procedure :: send_data_2d              ! subroutine (data, exchange_tag)
      procedure :: recv_data_2d              ! subroutine (data, exchange_tag)
      procedure :: buffer_2_recv_data        ! subroutine (exchange_buffer, recv_data) 
-     procedure :: interpolate_data          ! subroutine (send_data, recv_data, num_of_layer)
+     procedure :: interpolate_data          ! subroutine (send_data, recv_data, num_of_layer, intpl_tag)
   end type exchange_class
 
   interface exchange_class
@@ -107,15 +108,17 @@ contains
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-type(exchange_class) function init_exchange_class(my_name, intpl_flag)
+type(exchange_class) function init_exchange_class(my_name, intpl_flag, intpl_mode)
   implicit none
   character(len=*), intent(IN) :: my_name
   logical, intent(IN)          :: intpl_flag
+  integer, intent(IN)          :: intpl_mode
   type(exchange_class) :: my_exchange_class
 
   my_exchange_class%my_name    = trim(my_name)
   my_exchange_class%intpl_flag = intpl_flag  
-
+  my_exchange_class%intpl_mode = intpl_mode
+  
   init_exchange_class = my_exchange_class
 
 end function init_exchange_class
@@ -297,11 +300,15 @@ subroutine set_mapping_table_send_intpl(self, send_comp_name, send_grid_name, re
     !call make_conversion_table(self%recv_grid_index, self%my_map%intpled_index, self%recv_conv_table)
     !call recv_recv_grid_index(self)
     !call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 3")
-    call sort_conversion_table(self%send_grid_index, self%send_conv_table, self%recv_grid_index, self%recv_conv_table, self%coef) ! add 20250607
-    call reorder_conversion_table(self%send_grid_index, self%send_conv_table, self%recv_conv_table, self%coef) ! add 20250607
 
-    call make_parallel_interpolation_table(self%send_conv_table, self%recv_conv_table, self%coef, self%conv_table) ! add 20250608
-    
+    if ((self%intpl_mode == INTPL_SERIAL_SAFE).or.(self%intpl_mode == INTPL_PARALLEL)) then
+      call sort_conversion_table(self%send_grid_index, self%send_conv_table, self%recv_grid_index, self%recv_conv_table, self%coef) ! add 20250607
+      call reorder_conversion_table(self%send_grid_index, self%send_conv_table, self%recv_conv_table, self%coef) ! add 20250607
+    end if
+
+    if (self%intpl_mode == INTPL_PARALLEL) then
+      call make_parallel_interpolation_table(self%send_conv_table, self%recv_conv_table, self%coef, self%conv_table) ! add 20250608
+    end if
  else
     call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 4")
     call make_recv_map_info(self%ex_map%exchange_index, self%my_map)
@@ -460,11 +467,15 @@ subroutine set_mapping_table_recv_intpl(self, send_comp_name, send_grid_name, re
     call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 7")
     call make_conversion_table(self%recv_grid_index, self%my_map%intpled_index, self%recv_conv_table)
 
-    call sort_conversion_table(self%send_grid_index, self%send_conv_table, self%recv_grid_index, self%recv_conv_table, self%coef) ! add 20250518/mdf 20250604
-    call reorder_conversion_table(self%send_grid_index, self%send_conv_table, self%recv_conv_table, self%coef) ! add 20250604
-    
-    call make_parallel_interpolation_table(self%send_conv_table, self%recv_conv_table, self%coef, self%conv_table) ! add 20250608
+    if ((self%intpl_mode == INTPL_SERIAL_SAFE).or.(self%intpl_mode == INTPL_PARALLEL)) then
+      call sort_conversion_table(self%send_grid_index, self%send_conv_table, self%recv_grid_index, self%recv_conv_table, self%coef) ! add 20250518/mdf 20250604
+      call reorder_conversion_table(self%send_grid_index, self%send_conv_table, self%recv_conv_table, self%coef) ! add 20250604
+    end if
 
+    if (self%intpl_mode == INTPL_PARALLEL) then
+      call make_parallel_interpolation_table(self%send_conv_table, self%recv_conv_table, self%coef, self%conv_table) ! add 20250608
+    end if
+   
     call put_log("jlt_exchange_class : set_mapping_table, make_conversion_table 8")
   end if
 
@@ -1188,8 +1199,8 @@ subroutine send_data_1d(self, data, exchange_buffer, intpl_tag, exchange_tag)
   call put_log(trim(log_str))
 
   if (self%is_my_intpl()) then
-     call self%interpolate_data(reshape(data,[size(data), 1]), &
-                                exchange_buffer, 1, intpl_tag)
+       call self%interpolate_data(reshape(data,[size(data), 1]), &
+                                  exchange_buffer, 1, intpl_tag)
   else
     do i = 1, self%ex_map%exchange_data_size
       exchange_buffer(i,1) = data(i)
@@ -1271,8 +1282,7 @@ subroutine send_data_2d(self, data, exchange_buffer, num_of_layer, intpl_tag, ex
   
     do k = 1, num_of_layer
        if (self%is_my_intpl()) then
-           call self%interpolate_data(data, &
-                                      intpl_buffer, num_of_layer, intpl_tag)
+             call self%interpolate_data(data, intpl_buffer, num_of_layer, intpl_tag)
           !write(0, *) "send_data_2d, send interpolation ", intpl_buffer
        else
           !write(0, *) "send_data_2d, recv interpolation"
@@ -1590,7 +1600,25 @@ end subroutine buffer_2_recv_data
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine interpolate_data_org(self, send_data, recv_data, num_of_layer, intpl_tag)
+subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag)
+  implicit none
+  class(exchange_class)       :: self
+  real(kind=8), intent(IN)    :: send_data(:,:)
+  real(kind=8), intent(INOUT) :: recv_data(:,:)
+  integer, intent(IN)         :: num_of_layer
+  integer, intent(IN)         :: intpl_tag
+
+  if (self%intpl_mode == INTPL_PARALLEL) then
+     call interpolate_data_parallel(self, send_data, recv_data, num_of_layer, intpl_tag)
+  else
+     call interpolate_data_serial(self, send_data, recv_data, num_of_layer, intpl_tag)
+  end if
+  
+end subroutine interpolate_data
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+subroutine interpolate_data_serial(self, send_data, recv_data, num_of_layer, intpl_tag)
   use jlt_grid, only : get_grid_ptr
   use jlt_utils, only : put_log
   use mpi
@@ -1686,11 +1714,11 @@ subroutine interpolate_data_org(self, send_data, recv_data, num_of_layer, intpl_
   call put_log(trim(log_str))
 
   !write(0, *) "interpolate_data min, max = ", minval(send_data), maxval(send_data), minval(recv_data), maxval(recv_data)
-end subroutine interpolate_data_org
+end subroutine interpolate_data_serial
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag)
+subroutine interpolate_data_parallel(self, send_data, recv_data, num_of_layer, intpl_tag)
   use jlt_grid, only : get_grid_ptr
   use jlt_utils, only : put_log
   use mpi
@@ -1701,6 +1729,7 @@ subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag)
   integer, intent(IN)         :: num_of_layer
   integer, intent(IN)         :: intpl_tag
   integer, pointer            :: send_index(:), recv_index(:)
+  real(kind=8), pointer       :: coef(:)
   integer                     :: send_grid
   integer                     :: recv_grid
   real(kind=8), allocatable   :: weight_data(:)
@@ -1743,17 +1772,19 @@ subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag)
       do n = 1, num_of_layer
         weight_data(:) = 0.d0
         check_data(:) = 0
-        do j = 1, size(senf%conv_table)
-           send_index => self%conv_table(j)%send_conv_table
-           recv_index => senf%conv_table(j)%recv_conv_table
-           
+        do j = 1, size(self%conv_table)
+          send_index => self%conv_table(j)%send_conv_table
+          recv_index => self%conv_table(j)%recv_conv_table
+          coef       => self%conv_table(j)%coef
+          !$omp parallel do default(none),private(i, send_grid, recv_grid), &
+          !$omp shared(j, n, send_data, recv_data, check_data, weight_data, send_index, recv_index, coef)
           do i = 1, size(self%conv_table(j)%coef)
              send_grid = send_index(i)
              recv_grid = recv_index(i)
              if (send_data(send_grid, n) == missing_value) then
                 check_data(recv_grid) = 1
              else
-                recv_data(recv_grid, n) = recv_data(recv_grid, n) + send_data(send_grid, n)*self%coef(i)
+                recv_data(recv_grid, n) = recv_data(recv_grid, n) + send_data(send_grid, n) * coef(i)
                 weight_data(recv_grid) = weight_data(recv_grid) + self%coef(i)
              end if
           end do
@@ -1779,8 +1810,11 @@ subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag)
        do j = 1, size(self%conv_table)
           send_index => self%conv_table(j)%send_conv_table
           recv_index => self%conv_table(j)%recv_conv_table
+          coef       => self%conv_table(j)%coef
+          !$omp parallel do default(none),private(i), &
+          !$omp shared(j, k, send_data, recv_data, send_index, recv_index, coef)
           do i = 1, size(self%conv_table(j)%coef)
-             recv_data(recv_index(i),k) = recv_data(recv_index(i),k) + send_data(send_index(i),k)*self%conv_table(j)%coef(i)
+             recv_data(recv_index(i),k) = recv_data(recv_index(i),k) + send_data(send_index(i),k) * coef(i)
          !if (intpl_tag == 14) then
          !write(300+my_grid%get_my_rank(), *) i, send_index(i), recv_index(i), send_data(send_index(i),k), recv_data(recv_index(i),k), self%coef(i)
          !end if
@@ -1795,7 +1829,7 @@ subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag)
   call put_log(trim(log_str))
 
   !write(0, *) "interpolate_data min, max = ", minval(send_data), maxval(send_data), minval(recv_data), maxval(recv_data)
-end subroutine interpolate_data
+end subroutine interpolate_data_parallel
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 end module jlt_exchange_class

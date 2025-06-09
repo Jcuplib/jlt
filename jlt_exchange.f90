@@ -34,7 +34,7 @@ end subroutine init_exchange
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
 subroutine set_mapping_table(my_name, send_comp_name, send_grid_name, recv_comp_name, recv_grid_name, &
-                             map_tag, intpl_flag, send_grid, recv_grid, coef)
+                             map_tag, intpl_flag, intpl_mode, send_grid, recv_grid, coef)
   use jlt_grid, only : get_grid_ptr
   implicit none
   character(len=*), intent(IN) :: my_name
@@ -42,12 +42,13 @@ subroutine set_mapping_table(my_name, send_comp_name, send_grid_name, recv_comp_
   character(len=*), intent(IN) :: recv_comp_name, recv_grid_name
   integer, intent(IN)          :: map_tag
   logical, intent(IN)          :: intpl_flag
+  integer, intent(IN)          :: intpl_mode
   integer, intent(IN)          :: send_grid(:), recv_grid(:)
   real(kind=8), intent(IN)     :: coef(:)
 
   num_of_exchange = num_of_exchange + 1
 
-  exchange(num_of_exchange) = exchange_class(trim(my_name), intpl_flag)
+  exchange(num_of_exchange) = exchange_class(trim(my_name), intpl_flag, intpl_mode)
 
   call exchange(num_of_exchange)%set_mapping_table(trim(send_comp_name), trim(send_grid_name), &
                                                    trim(recv_comp_name), trim(recv_grid_name), &

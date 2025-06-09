@@ -437,8 +437,9 @@ end function jlt_get_fill_value
 
 subroutine jlt_set_mapping_table(my_model_name, &
                                  send_model_name, send_grid_name, recv_model_name,  recv_grid_name, &
-                                 map_tag, is_recv_intpl, send_grid, recv_grid, coef)
+                                 map_tag, is_recv_intpl, intpl_mode, send_grid, recv_grid, coef)
   use jlt_constant, only : NUM_OF_EXCHANGE_GRID, MAX_GRID, NO_GRID, STR_LONG
+  use jlt_constant, only : INTPL_SERIAL_FAST, INTPL_SERIAL_SAFE, INTPL_PARALLEL
   use jlt_mpi_lib, only : jml_isLocalLeader, jml_BcastLocal, jml_SendLeader, jml_RecvLeader, jml_GetMyrank, &
                            jml_GetLeaderRank
   use jlt_utils, only : put_log, IntToStr, error
@@ -452,9 +453,11 @@ subroutine jlt_set_mapping_table(my_model_name, &
   character(len=*), intent(IN)  :: recv_model_name, recv_grid_name
   integer, intent(IN)           :: map_tag
   logical, intent(IN)           :: is_recv_intpl
+  character(len=*), intent(IN)  :: intpl_mode ! "FAST", "SAFE", "PARALLEL"
   integer, intent(IN)           :: send_grid(:), recv_grid(:)
   real(kind=8), intent(IN)      :: coef(:)
-  logical :: is_my_intpl  
+  logical :: is_my_intpl
+  integer :: intpl_mode_int
   integer :: my_model_id, send_model_id, recv_model_id
   integer :: i
   
@@ -473,9 +476,20 @@ subroutine jlt_set_mapping_table(my_model_name, &
      is_my_intpl = .not.is_recv_intpl
   end if
 
+  select case (trim(intpl_mode))
+  case ("FAST", "fast", "Fast")
+     intpl_mode_int = INTPL_SERIAL_FAST
+  case("SAFE", "safe", "Safe")
+     intpl_mode_int = INTPL_SERIAL_SAFE
+  case("PARALLEL", "parallel", "Parallel")
+     intpl_mode_int = INTPL_PARALLEL
+  case default
+     call error("jlt_set_mapping_table", "intpl_mode msut be FAST or SAFE or PARALLEL")
+  end select
+  
   call set_mapping_table(trim(my_model_name), trim(send_model_name), trim(send_grid_name), &
                                               trim(recv_model_name), trim(recv_grid_name), &
-                                              map_tag, is_my_intpl, send_grid, recv_grid, coef)
+                                              map_tag, is_my_intpl, intpl_mode_int, send_grid, recv_grid, coef)
                                               
   call put_log("set mapping table end : "//trim(send_model_name)//":"//trim(recv_model_name),1)
 
