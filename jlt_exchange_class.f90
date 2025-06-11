@@ -1675,8 +1675,8 @@ subroutine write_exchange_class(self, fid)
   write(fid) self%intpl_mode
 
   ! write interpolation table
+  !write(0, *) self%index_size, size(self%send_grid_index), size(self%recv_grid_index), size(self%coef), size(self%target_rank)  
   write(fid) self%index_size
-  
   if (self%index_size > 0) then
      write(fid) self%send_grid_index
      write(fid) self%recv_grid_index
@@ -1684,12 +1684,17 @@ subroutine write_exchange_class(self, fid)
      write(fid) self%target_rank
   end if
 
-  if (self%intpl_flag) then ! my interpolation
-     write(fid) self%send_conv_table
-     write(fid) self%recv_conv_table
-  end if
+  !write(0, *) self%intpl_flag, self%index_size, size(self%send_conv_table), size(self%recv_conv_table)
+
+  write(fid) size(self%send_conv_table)
+  if (size(self%send_conv_table) > 0) write(fid) self%send_conv_table
+
+  write(fid) size(self%recv_conv_table)
+  if (size(self%recv_conv_table) > 0) write(fid) self%recv_conv_table
+  
   
   ! write 2d parallel interpolation table
+
   write(fid) self%conv_table_size
   
   if (self%conv_table_size > 0) then
@@ -1703,7 +1708,7 @@ subroutine write_exchange_class(self, fid)
      end do
   end if
 
-  
+
   ! write exchange map
   write(fid) self%ex_map%num_of_exchange_rank 
   if (self%ex_map%num_of_exchange_rank > 0) then  
@@ -1714,11 +1719,14 @@ subroutine write_exchange_class(self, fid)
   
 
   write(fid) self%ex_map%exchange_data_size
-  
-  if (self%ex_map%exchange_data_size > 0) then
-     write(fid) self%ex_map%exchange_index
-     if (.not.self%intpl_flag) write(fid) self%ex_map%conv_table
-  end if
+
+  conv_table_size = size(self%ex_map%exchange_index)
+  write(fid) conv_table_size
+  if (conv_table_size > 0) write(fid) self%ex_map%exchange_index
+
+  conv_table_size = size(self%ex_map%conv_table)
+  write(fid) conv_table_size
+  if (conv_table_size > 0) write(fid) self%ex_map%conv_table
 
   ! write send map
   write(fid) self%send_map%intpled_data_size
@@ -1772,10 +1780,15 @@ subroutine read_exchange_class(self, fid)
      read(fid) self%target_rank
   end if
 
-  if (self%intpl_flag) then
-     allocate(self%send_conv_table(self%index_size))
-     allocate(self%recv_conv_table(self%index_size))
+  read(fid) conv_table_size
+  if (conv_table_size > 0) then
+     allocate(self%send_conv_table(conv_table_size))
      read(fid) self%send_conv_table
+  end if
+
+  read(fid) conv_table_size
+  if (conv_table_size > 0) then
+     allocate(self%recv_conv_table(conv_table_size))
      read(fid) self%recv_conv_table
   end if
 
@@ -1808,15 +1821,19 @@ subroutine read_exchange_class(self, fid)
   end if
 
   read(fid) self%ex_map%exchange_data_size
-  if (self%ex_map%exchange_data_size > 0) then
-     allocate(self%ex_map%exchange_index(self%ex_map%exchange_data_size))
+
+  read(fid) conv_table_size
+  if (conv_table_size > 0) then
+     allocate(self%ex_map%exchange_index(conv_table_size))
      read(fid) self%ex_map%exchange_index
-     if (.not.self%intpl_flag) then
-       allocate(self%ex_map%conv_table(self%ex_map%exchange_data_size))
-       read(fid) self%ex_map%conv_table
-     end if
   end if
 
+  read(fid) conv_table_size
+  if (conv_table_size > 0) then
+     allocate(self%ex_map%conv_table(conv_table_size))
+     read(fid) self%ex_map%conv_table
+  end if
+  
   ! read send map
   read(fid) self%send_map%intpled_data_size
   if (self%send_map%intpled_data_size > 0) then

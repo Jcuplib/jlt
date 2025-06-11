@@ -341,7 +341,31 @@ Routines
  jlt_read_mapping_table       : [mod]
  
 Detail
- mapping table情報を出力、入力できるようにした。
+ mapping table情報を入力する際に、データ情報のセッティングも実施するようにした。
+ 
+-----------------------------------------------------------------
+
+Version:0.030201
+Date:2025/06/11
+
+Files: jlt_exchange_class.f90
+
+Routines
+
+ write_exchange_class         : [mod]
+ read_exchange_class          : [mod]
+ get_recv_comp_name           : [add]
+ get_recv_grid_name           : [add]
+ get_num_of_exchange          : [add]
+ get_exchange_ptr_num         : [add]
+ get_exchange_ptr_name        : [add]
+ get_exchange_ptr             : [mod]
+ jlt_read_mapping_table       : [mod]
+ 
+Detail
+ mapping table情報の入出力で送信側補間時のバグを改修。
+
+ 
  
  
  
