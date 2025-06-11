@@ -304,6 +304,45 @@ Routines
 Detail
  補間計算をスレッド並列できるようにconv_tableを2次元化し、interpolate_dataも2次元化した。
  
+-----------------------------------------------------------------
+
+Version:0.030100
+Date:2025/06/10
+
+Files: jlt_exchange_class.f90, jlt_exchange.f90, jlt_interface.f90
+
+Routines
+ write_exchange_class         : [add]
+ read_exchange_class          : [add]
+ write_exchange               : [add]
+ read_exchange                : [add]
+ jlt_write_mapping_table      : [mod]
+ jlt_read_mapping_table       : [mod]
+ 
+Detail
+ mapping table情報を出力、入力できるようにした。
+ 
+-----------------------------------------------------------------
+
+Version:0.030200
+Date:2025/06/11
+
+Files: jlt_exchange_class.f90, jlt_exchange.f90, jlt_interface.f90
+
+Routines
+ get_send_comp_name           : [add]
+ get_send_grid_name           : [add]
+ get_recv_comp_name           : [add]
+ get_recv_grid_name           : [add]
+ get_num_of_exchange          : [add]
+ get_exchange_ptr_num         : [add]
+ get_exchange_ptr_name        : [add]
+ get_exchange_ptr             : [mod]
+ jlt_read_mapping_table       : [mod]
+ 
+Detail
+ mapping table情報を出力、入力できるようにした。
+ 
  
  
 

@@ -1137,17 +1137,53 @@ end subroutine jlt_inc_time
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
 subroutine jlt_write_mapping_table(fid)
+  use jlt_exchange, only : write_exchange
   implicit none
   integer, intent(IN) :: fid
+
+  call write_exchange(fid)
   
 end subroutine jlt_write_mapping_table
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
 subroutine jlt_read_mapping_table(fid)
+  use jlt_constant, only : STR_SHORT
+  use jlt_exchange, only : read_exchange, get_num_of_exchange, get_exchange_ptr
+  use jlt_exchange_class, only : exchange_class
+  use jlt_data, only : get_num_of_send_data, is_my_send_data, set_my_send_exchange, &
+                       get_num_of_recv_data, is_my_recv_data, set_my_recv_exchange
   implicit none
   integer, intent(IN) :: fid
+  character(len=STR_SHORT) :: send_model_name
+  character(len=STR_SHORT) :: send_grid_name
+  character(len=STR_SHORT) :: recv_model_name
+  character(len=STR_SHORT) :: recv_grid_name
+  class(exchange_class), pointer :: exchange_ptr
+  integer :: i, j
+  
+  call read_exchange(fid)
 
+  do i = 1, get_num_of_exchange()
+     exchange_ptr => get_exchange_ptr(i)
+     send_model_name = trim(exchange_ptr%get_send_comp_name())
+     send_grid_name  = trim(exchange_ptr%get_send_grid_name())
+     recv_model_name = trim(exchange_ptr%get_recv_comp_name())
+     recv_grid_name  = trim(exchange_ptr%get_recv_grid_name())
+  
+     do j = 1, get_num_of_send_data()
+        if (is_my_send_data(j, send_model_name, send_grid_name, recv_model_name, recv_grid_name)) then
+           call set_my_send_exchange(j, send_model_name, send_grid_name, recv_model_name, recv_grid_name)
+        end if
+     end do
+  
+     do j = 1, get_num_of_recv_data()
+        if (is_my_recv_data(j, send_model_name, send_grid_name, recv_model_name, recv_grid_name)) then
+           call set_my_recv_exchange(j, send_model_name, send_grid_name, recv_model_name, recv_grid_name)
+        end if
+     end do
+  end do
+  
 end subroutine jlt_read_mapping_table
 
 !=======+=========+=========+=========+=========+=========+=========+=========+

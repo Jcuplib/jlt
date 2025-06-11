@@ -8,16 +8,22 @@ module jlt_exchange
   public :: init_exchange                     ! subroutine ()
   public :: set_mapping_table                 ! subroutine (my_name, send_comp_name, send_grid_name, recv_comp_name, recv_grid_name,
                                               !             map_tag, intpl_flag, send_grid, recv_grid, coef)
+  public :: get_num_of_exchange               ! integer function ()
   public :: is_exchange_assigned              ! logical function (send_comp_name, send_grid_name, recv_comp_name, recv_grid_name)
   public :: get_exchange_ptr                  ! type(exchange_type), pointer, function (send_comp_name, send_grid_name, recv_comp_name, recv_grid_name)
-  
-!--------------------------------   private  ---------------------------------!
+  public :: write_exchange                    ! subroutine (fid)
+  public :: read_exchange                     ! subroutine (fid)
+
+ !--------------------------------   private  ---------------------------------!
 
   integer, parameter :: MAX_EXCHANGE = 8
   integer :: num_of_exchange
-
+  
   type(exchange_class), pointer :: exchange(:)
 
+  interface get_exchange_ptr
+     module procedure get_exchange_ptr_name, get_exchange_ptr_num
+  end interface
   
 contains
 
@@ -58,6 +64,16 @@ end subroutine set_mapping_table
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
+function get_num_of_exchange() result(res)
+  implicit none
+  integer :: res
+
+  res = num_of_exchange
+
+end function get_num_of_exchange
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
 function is_exchange_assigned(send_comp_name, send_grid_name, &
                               recv_comp_name, recv_grid_name) result (res)
   implicit none
@@ -80,7 +96,7 @@ end function is_exchange_assigned
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-function get_exchange_ptr(send_comp_name, send_grid_name, &
+function get_exchange_ptr_name(send_comp_name, send_grid_name, &
                           recv_comp_name, recv_grid_name) result (res)
   use jlt_utils, only : error
   implicit none
@@ -102,7 +118,53 @@ function get_exchange_ptr(send_comp_name, send_grid_name, &
   
   res => null()
   
-end function get_exchange_ptr
+end function get_exchange_ptr_name
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+function get_exchange_ptr_num(exchange_num) result (res)
+  use jlt_utils, only : error
+  implicit none
+  integer, intent(IN) :: exchange_num
+  type(exchange_class), pointer :: res
+
+  if (exchange_num > num_of_exchange) then
+     call error("[jlt_exchange:get_exchange_ptr]","exchange num exceeded the defiend exchange pattern")
+  end if
+  
+  res => exchange(exchange_num)
+  
+end function get_exchange_ptr_num
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+subroutine write_exchange(fid)
+  implicit none
+  integer, intent(IN) :: fid
+  integer :: i
+
+  write(fid) num_of_exchange
+  
+  do i = 1, num_of_exchange
+     call exchange(i)%write_exchange_class(fid)
+  end do
+
+end subroutine write_exchange
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+subroutine read_exchange(fid)
+  implicit none
+  integer, intent(IN) :: fid
+  integer :: i
+
+  read(fid) num_of_exchange
+
+  do i = 1, num_of_exchange
+     call exchange(i)%read_exchange_class(fid)
+  end do
+
+end subroutine read_exchange
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
