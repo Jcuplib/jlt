@@ -99,7 +99,7 @@ module jlt_mpi_lib
 !--------------------------------   private  ---------------------------------!
 
   integer, parameter, private :: MPI_MY_TAG = 0
-  integer, private            :: MPI_MAX_TAG
+  integer(kind=8), private            :: MPI_MAX_TAG
   
   interface jml_BcastGlobal
     module procedure jml_bcast_string_global_1, jml_bcast_string_global_2

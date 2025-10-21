@@ -156,6 +156,7 @@ subroutine jlt_initialize(model_name, default_time_unit, log_level, log_stderr)
   integer :: i
 
   if (my_comp_name == "") then ! jlt_set_new_comp not called
+     my_comp_name = trim(model_name)
      call jlt_set_new_comp(model_name)
   end if
 
@@ -248,15 +249,22 @@ end subroutine jlt_initialize
 subroutine jlt_coupling_end(time_array, isCallFinalize)
   use jlt_mpi_lib, only : jml_finalize!, jml_Send1D_m2c, jml_destruct_window
   use jlt_utils, only : finalize_log, put_log
+  use jlt_grid, only : get_num_of_my_grid, get_grid_name
+  use jlt_remapping, only : delete_grid_rank_file
   implicit none
   integer, intent(IN)           :: time_array(:)
   logical, optional, intent(IN) :: isCallFinalize
   integer :: i
 
+  
   call put_log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ", 1)
   call put_log("!!!!!!!!!!!!!   COUPLER FINALIZE  START !!!!!!!!!!!! ", 1)
   call put_log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ", 1)
 
+  do i = 1, get_num_of_my_grid()
+     call delete_grid_rank_file(trim(my_comp_name), trim(get_grid_name(i)))
+  end do
+  
   call jml_finalize(isCallFinalize)
 
   call put_log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ", 1)
@@ -346,8 +354,12 @@ subroutine jlt_def_grid(grid_index, model_name, grid_name, num_of_vgrid)
                                 //trim(IntToStr(size(grid_index))) &
                //", min : "//trim(IntToStr(minval(grid_index)))//", max : "//trim(IntToStr(maxval(grid_index))))
 
+  call put_log("jlt_def_grid : make_grid_rank_file start")
+
   call make_grid_rank_file(model_name, grid_name, grid_index)
   
+  call put_log("jlt_def_grid : make_grid_rank_file finish")
+
 end subroutine jlt_def_grid
 
 !=======+=========+=========+=========+=========+=========+=========+=========+

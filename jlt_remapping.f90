@@ -6,6 +6,7 @@ module jlt_remapping
 
 public :: init_remapping                   ! subroutine (local_comm)
 public :: make_grid_rank_file              ! subroutine (my_comp, my_grid, grid_index)
+public :: delete_grid_rank_file            ! subroutine (my_comp, my_grid)
 public :: make_local_mapping_table_no_sort ! subroutine (my_index_global, target_index_global, coef_global,
                                            !             grid_index, my_index_local, target_index_local, coef_local) 
 public :: make_local_mapping_table         ! subroutine (my_index_global, target_index_global, coef_global,
@@ -43,7 +44,170 @@ end subroutine init_remapping
 
 subroutine make_grid_rank_file(my_comp, my_grid, grid_index)
   use mpi
-  use jlt_utils, only : set_fid, sort_int_1d, set_fid
+  use jlt_utils, only : set_fid, sort_int_1d, set_fid, error, put_log
+  implicit none
+  character(len=*), intent(IN) :: my_comp, my_grid    ! comp name and grid name
+  integer, intent(IN)          :: grid_index(:)       ! local grid index
+  character(len=STR_LONG)      :: file_name           ! grid_rank file name
+  integer, allocatable         :: sorted_index(:)     ! sorted local grid index
+  integer, allocatable         :: grid_size(:)        ! grid index array size of each process
+  integer                      :: global_size         ! number of global grid points
+  integer, allocatable         :: global_index(:)     ! global grid index
+  integer, allocatable         :: global_rank(:)      ! global rank of grid points
+  integer, allocatable         :: displs(:)           ! displacement
+  integer                      :: int_array(1)
+  integer                      :: local_size          ! local grid index size
+  integer                      :: ierror
+  integer                      :: i, j, counter
+  integer                      :: fid = 222
+  type local_grid_type
+     integer :: current_pos = 1
+     integer :: local_size
+     integer, pointer :: local_index(:)
+  end type local_grid_type
+
+  type(local_grid_type), pointer :: local_grid(:)
+  integer :: ista(MPI_status_size)
+  integer :: current_index
+  integer :: current_rank
+
+
+  if (my_rank == 0) then
+     allocate(local_grid(my_size))
+  end if
+  
+  local_size   = size(grid_index)
+  int_array(1) = local_size
+
+  if (my_rank == 0) then
+     allocate(grid_size(my_size))
+  else
+     allocate(grid_size(1))
+  end if
+  
+  call mpi_gather(int_array, 1, MPI_INTEGER, grid_size, 1, MPI_INTEGER, 0, my_comm, ierror)
+
+  allocate(sorted_index(local_size))
+
+  call put_log("make_grid_rank_file : local sorting start")
+
+  sorted_index(:) = grid_index(:)
+  call sort_int_1d(local_size, sorted_index)
+  
+  call put_log("make_grid_rank_file : local sorting finish")
+
+  call put_log("make_grid_rank_file : send/recv staart")
+
+  if (my_rank == 0) then
+     global_size = 0
+     do i = 1, my_size
+        local_grid(i)%local_size = grid_size(i)
+        allocate(local_grid(i)%local_index(grid_size(i)))
+        global_size = global_size + grid_size(i)
+     end do
+     local_grid(1)%local_index(:) = sorted_index(:)
+     do i = 2, my_size
+        call mpi_recv(local_grid(i)%local_index, grid_size(i), MPI_INTEGER, i-1, 0, my_comm, ista, ierror)
+        if (ierror /= 0) then
+           call error("make_grid_rank_file2", "mpi_recv error")
+        end if
+     end do
+     allocate(global_index(global_size))
+     allocate(global_rank(global_size))
+  else
+     call mpi_send(sorted_index, local_size, MPI_INTEGER, 0, 0, my_comm, ierror)
+     if (ierror /= 0) then
+        call error("make_grid_rank_file2", "mpi_send error")
+     end if
+  end if
+
+  call put_log("make_grid_rank_file : send/recv finish")
+
+  if (my_rank /= 0) then
+     deallocate(grid_size)
+     return
+  end if
+  
+
+  ! root rank only 
+
+  call put_log("make_grid_rank_file : global sorting staart")
+
+  ! sorting
+  current_index = 99999999 ! huge number
+  current_rank  = 0
+  do i = 1, global_size
+     do j = 1, my_size
+        if (local_grid(j)%current_pos <= local_grid(j)%local_size) then
+           if (local_grid(j)%local_index(local_grid(j)%current_pos) < current_index) then
+              current_index = local_grid(j)%local_index(local_grid(j)%current_pos)
+              current_rank  = j
+           end if
+        end if
+     end do
+     global_index(i) = current_index
+     global_rank(i)  = current_rank - 1
+     local_grid(current_rank)%current_pos = local_grid(current_rank)%current_pos + 1
+     current_index = 99999999 ! huge number
+  end do
+
+  call put_log("make_grid_rank_file : global sorting finish")
+
+  call put_log("make_grid_rank_file : file output start")
+
+  write(file_name, '("jlt.",A,".",A,".GRID_INDEX")') trim(my_comp), trim(my_grid)
+  call set_fid(fid)
+  open(fid, file=trim(file_name), form="unformatted", access="stream", action = 'write', status="replace")
+  write(fid) global_index
+  close(fid)
+
+  write(file_name, '("jlt.",A,".",A,".GRID_RANK")') trim(my_comp), trim(my_grid)
+  call set_fid(fid)
+  open(fid, file=trim(file_name), form="unformatted", access="stream", action = 'write', status="replace")
+  write(fid) global_rank
+  close(fid)
+
+  call put_log("make_grid_rank_file : file output finish")
+
+  deallocate(global_index)
+  deallocate(global_rank)
+  
+end subroutine make_grid_rank_file
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+subroutine delete_grid_rank_file(my_comp, my_grid)
+  use jlt_utils, only : set_fid, sort_int_1d, set_fid, error, put_log
+  implicit none
+  character(len=*), intent(IN) :: my_comp, my_grid    ! comp name and grid name
+  character(len=STR_LONG)      :: file_name           ! grid_rank file name
+  integer                      :: stat
+  integer                      :: fid = 222
+
+  if (my_rank /= 0) return ! root only
+
+  call put_log("delete_grid_rank_file : file delete start")
+
+  write(file_name, '("jlt.",A,".",A,".GRID_INDEX")') trim(my_comp), trim(my_grid)
+  call set_fid(fid)
+  open(fid, file=trim(file_name),  iostat = stat)
+  close(fid, status="delete", iostat = stat)
+
+  write(file_name, '("jlt.",A,".",A,".GRID_RANK")') trim(my_comp), trim(my_grid)
+  call set_fid(fid)
+  open(fid, file=trim(file_name), iostat = stat)
+  close(fid, status="delete", iostat = stat)
+
+  call put_log("delete_grid_rank_file : file delete finish")
+
+  
+end subroutine delete_grid_rank_file
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+subroutine make_grid_rank_file_org(my_comp, my_grid, grid_index)
+  use mpi
+  use jlt_utils, only : set_fid, sort_int_1d, set_fid, put_log
   implicit none
   character(len=*), intent(IN) :: my_comp, my_grid    ! comp name and grid name
   integer, intent(IN)          :: grid_index(:)       ! local grid index
@@ -102,9 +266,16 @@ subroutine make_grid_rank_file(my_comp, my_grid, grid_index)
 
   call mpi_gatherv(grid_index, local_size, MPI_INTEGER, global_index, grid_size, displs, MPI_INTEGER, 0, my_comm, ierror)
 
+    
   if (my_rank == 0) then
+
+    call put_log("make_grid_rank_file : sorting start")
      
     call sort_int_1d(global_size, global_index, global_rank)
+
+    call put_log("make_grid_rank_file : sorting finish")
+
+    call put_log("make_grid_rank_file : file output start")
 
     write(file_name, '("jlt.",A,".",A,".GRID_INDEX")') trim(my_comp), trim(my_grid)
     call set_fid(fid)
@@ -118,14 +289,84 @@ subroutine make_grid_rank_file(my_comp, my_grid, grid_index)
     write(fid) global_rank
     close(fid)
 
-  end if
+    call put_log("make_grid_rank_file : file output finish")
+
+ end if
 
   deallocate(grid_size)
   deallocate(displs)
   deallocate(global_index)
   deallocate(global_rank)
   
-end subroutine make_grid_rank_file
+end subroutine make_grid_rank_file_org
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+subroutine make_grid_rank_file_local(my_comp, my_grid, grid_index)
+  use mpi
+  use jlt_utils, only : set_fid, sort_int_1d, set_fid
+  implicit none
+  character(len=*), intent(IN) :: my_comp, my_grid    ! comp name and grid name
+  integer, intent(IN)          :: grid_index(:)       ! local grid index
+  character(len=STR_LONG)      :: file_name           ! grid_rank file name
+  integer, allocatable         :: grid_info(:,:)      ! grid index array size of each process
+  integer                      :: global_size         ! number of global grid points
+  integer, allocatable         :: global_index(:)     ! global grid index
+  integer, allocatable         :: global_rank(:)      ! global rank of grid points
+  integer, allocatable         :: displs(:)           ! displacement
+  integer                      :: int_array(3)
+  integer                      :: local_size          ! local grid index size
+  integer                      :: ierror
+  integer                      :: i, j, counter
+  integer                      :: fid = 222
+  
+
+  local_size   = size(grid_index)
+  int_array(1) = local_size
+  int_array(2) = minval(grid_index)
+  int_array(3) = maxval(grid_index)
+  
+  if (my_rank == 0) then
+     allocate(grid_info(3, my_size))
+  else
+     allocate(grid_info(1,1))
+  end if
+  
+  call mpi_gather(int_array, 3, MPI_INTEGER, grid_info, 3, MPI_INTEGER, 0, my_comm, ierror)
+
+  if (my_rank == 0) then
+     write(file_name, '("jlt.",A,".",A,".GRID_INFO")') trim(my_comp), trim(my_grid)
+     call set_fid(fid)
+     open(fid, file=trim(file_name), form="unformatted", access="stream", action = 'write', status="replace")
+     write(fid) my_size
+     write(fid) grid_info
+     close(fid)
+  end if
+  
+  global_size = size(grid_index)
+  
+  allocate(global_index(global_size))
+  allocate(global_rank(global_size))
+     
+  call sort_int_1d(global_size, global_index, global_rank)
+
+  write(file_name, '("jlt.",A,".",A,".GRID_INDEX.PE", I5.5)') trim(my_comp), trim(my_grid), my_rank
+  call set_fid(fid)
+  open(fid, file=trim(file_name), form="unformatted", access="stream", action = 'write', status="replace")
+  write(fid) global_index
+  close(fid)
+
+  write(file_name, '("jlt.",A,".",A,".GRID_RANK.PE", I5.5)') trim(my_comp), trim(my_grid), my_rank
+  call set_fid(fid)
+  open(fid, file=trim(file_name), form="unformatted", access="stream", action = 'write', status="replace")
+  write(fid) global_rank
+  close(fid)
+
+
+  deallocate(global_index)
+  deallocate(global_rank)
+  
+end subroutine make_grid_rank_file_local
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
@@ -335,6 +576,7 @@ subroutine make_local_mapping_table_no_sort(global_index, global_target, global_
 
   table_size = size(grid_index)
 
+  
   allocate(sorted_index(table_size)) 
   
   do i = 1, table_size
@@ -350,7 +592,14 @@ subroutine make_local_mapping_table_no_sort(global_index, global_target, global_
   end do
 
   local_size = counter
-  
+
+  if (local_size == 0) then
+     local_index  => null()
+     local_target => null()
+     local_coef   => null()
+     return
+  end if
+
   allocate(local_index(local_size))
   allocate(local_target(local_size))
   allocate(local_coef(local_size))

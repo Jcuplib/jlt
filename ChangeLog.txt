@@ -365,6 +365,85 @@ Routines
 Detail
  mapping table情報の入出力で送信側補間時のバグを改修。
 
+-----------------------------------------------------------------
+
+Version:0.030202
+Date:2025/08/28
+
+Files: jlt_exchange_class.f90
+
+Routines
+
+ set_mapping_table_send_intpl : [mod]
+ set_mapping_table_recv_intpl : [mod]
+ target_2_exchange_buffer     : [mod]
+ 
+Detail
+ localなmapping table sizeが0の時、何もしないように改修。
+
+-----------------------------------------------------------------
+
+Version:0.030203
+Date:2025/08/31
+
+Files: jlt_exchange_class.f90
+
+Routines
+
+ write_exchange_class         : [mod]
+ 
+Detail
+ 交換格子が無く配列がallocateされていないときに何もしないように改修。
+
+-----------------------------------------------------------------
+
+Version:0.030204
+Date:2025/09/01
+
+Files: jlt_exchange_class.f90
+
+Routines
+
+ interpolate_data_serial      : [mod]
+ interpolate_data_parallel    : [mod]
+ 
+Detail
+ 補間格子が無くconv_tableがallocateされていないときに何もしないように改修。
+
+-----------------------------------------------------------------
+
+Version:0.030300
+Date:2025/10/21
+
+Files: jlt_utils.f90, jlt_remapping.f90
+
+Routines
+
+ quicksort_int                : [add]
+ sort_int_id                  : [mod]
+ make_grid_rank_file          : [mod]
+ 
+Detail
+ ソーティングアルゴリズムをクイックソートに変更。格子点番号と所属ランクの計算アルゴリズムを修正。
+
+-----------------------------------------------------------------
+
+Version:0.030400
+Date:2025/10/21
+
+Files: jlt_remapping.f90, jlt_grid.f90, jlt_interface.f90
+
+Routines
+
+ delete_grid_rank_file        : [add]
+ get_num_of_my_grid           : [add]
+ get_grid_name                : [add]
+ jlt_coupling_end             : [mod]
+ 
+Detail
+ プログラム終了時に、def_gridで作成した格子点番号ファイルとランクファイルを削除するようにした。
+ 
+
  
  
  

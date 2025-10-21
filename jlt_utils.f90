@@ -525,8 +525,76 @@ end subroutine cdate_2_idate
 
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
-! 2017/01/09 [MOD] radix sort
+
 subroutine sort_int_1d(num_of_data, data, data2)
+  implicit none
+  integer, intent(IN) :: num_of_data
+  integer, intent(INOUT) :: data(num_of_data)
+  integer, optional, intent(INOUT) :: data2(num_of_data)
+  integer :: sindex(num_of_data)
+  integer :: sindex2(num_of_data)
+  integer :: digit
+  integer :: n
+
+  if (num_of_data <= 1) return ! 20200514 add
+
+  if (maxval(data) <= 0) return
+
+  n = size(data)
+  
+  if (present(data2)) then
+     call quicksort_int(data, 1, n, data2) 
+  else
+     call quicksort_int(data, 1, n)
+  end if
+
+end subroutine sort_int_1d
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+recursive subroutine quicksort_int(a, left, right, b)
+    ! In-place quicksort for integer array a(:)
+    ! If optional array b(:) is given, it is reordered in the same way.
+    integer, intent(inout) :: a(:)
+    integer, intent(in)    :: left, right
+    integer, intent(inout), optional :: b(:)
+    integer :: i, j, pivot, tmp, tmp_b
+
+    if (left >= right) return
+
+    i = left
+    j = right
+    pivot = a((left + right) / 2)
+
+    do
+       do while (a(i) < pivot)
+          i = i + 1
+       end do
+       do while (a(j) > pivot)
+          j = j - 1
+       end do
+       if (i <= j) then
+          tmp = a(i)
+          a(i) = a(j)
+          a(j) = tmp
+          if (present(b)) then
+             tmp_b = b(i)
+             b(i) = b(j)
+             b(j) = tmp_b
+          end if
+          i = i + 1
+          j = j - 1
+       end if
+       if (i > j) exit
+    end do
+
+    if (left < j) call quicksort_int(a, left, j, b)
+    if (i < right) call quicksort_int(a, i, right, b)
+end subroutine quicksort_int
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+subroutine sort_int_1d_radix(num_of_data, data, data2)
   implicit none
   integer, intent(IN) :: num_of_data
   integer, intent(INOUT) :: data(num_of_data)
@@ -555,10 +623,10 @@ subroutine sort_int_1d(num_of_data, data, data2)
     end do
   end if
 
-end subroutine sort_int_1d
+end subroutine sort_int_1d_radix
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
-! 
+
 subroutine radix_sort(fig, num_of_data, num1, num2, num3, num4)
   implicit none
   integer, intent(IN) :: fig

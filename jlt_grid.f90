@@ -6,6 +6,8 @@ module jlt_grid
   public :: init_grid
   public :: def_grid
   public :: end_grid_def
+  public :: get_num_of_my_grid
+  public :: get_grid_name
   public :: get_grid_ptr
 
 !--------------------------------   private  ---------------------------------!
@@ -58,6 +60,25 @@ subroutine end_grid_def()
   implicit none
 
 end subroutine end_grid_def
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+integer function get_num_of_my_grid()
+  implicit none
+
+  get_num_of_my_grid = num_of_my_grid
+
+end function get_num_of_my_grid
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+character(STR_SHORT) function get_grid_name(grid_num)
+  implicit none
+  integer, intent(IN) :: grid_num
+
+  get_grid_name = my_grid(grid_num)%get_grid_name()
+
+end function get_grid_name
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 

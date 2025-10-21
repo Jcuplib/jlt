@@ -219,13 +219,20 @@ subroutine set_mapping_table_send_intpl(self, send_comp_name, send_grid_name, re
      
      call make_local_mapping_table_no_sort(send_grid, recv_grid, coef, my_grid%get_grid_index_ptr(), &
                                    self%index_size, self%send_grid_index, self%recv_grid_index, self%coef)
-   
+
+     if (self%index_size == 0) then
+        return
+     end if
+     
      allocate(self%target_rank(self%index_size))
      call get_target_grid_rank(recv_comp_name, recv_grid_name, self%recv_grid_index, self%target_rank)
   else
      my_grid => get_grid_ptr(trim(recv_grid_name))
      call make_local_mapping_table_no_sort(recv_grid, send_grid, coef, my_grid%get_grid_index_ptr(), &
                                    self%index_size, self%recv_grid_index, self%send_grid_index, self%coef)
+     if (self%index_size == 0) then
+        return
+     end if
      allocate(self%target_rank(self%index_size))
      call get_target_grid_rank(send_comp_name, send_grid_name, self%send_grid_index, self%target_rank)
   end if
@@ -404,12 +411,18 @@ subroutine set_mapping_table_recv_intpl(self, send_comp_name, send_grid_name, re
      call make_local_mapping_table_no_sort(send_grid, recv_grid, coef, my_grid%get_grid_index_ptr(), &
                                    self%index_size, self%send_grid_index, self%recv_grid_index, self%coef)
    
+     if (self%index_size == 0) then
+        return
+     end if
      allocate(self%target_rank(self%index_size))
      call get_target_grid_rank(recv_comp_name, recv_grid_name, self%recv_grid_index, self%target_rank)
   else
      my_grid => get_grid_ptr(trim(recv_grid_name))
      call make_local_mapping_table_no_sort(recv_grid, send_grid, coef, my_grid%get_grid_index_ptr(), &
                                    self%index_size, self%recv_grid_index, self%send_grid_index, self%coef)
+     if (self%index_size == 0) then
+        return
+     end if
      allocate(self%target_rank(self%index_size))
      call get_target_grid_rank(send_comp_name, send_grid_name, self%send_grid_index, self%target_rank)
   end if
@@ -1194,7 +1207,7 @@ subroutine exchange_2_local(self, exchange_data, grid_data)
   integer :: i
   integer :: my_rank, ierr
 
-  call mpi_comm_rank(MPI_COMM_WORLD, my_rank, ierr)
+  !call mpi_comm_rank(MPI_COMM_WORLD, my_rank, ierr)
   !write(399 + my_rank, *) "exchange_2_local, ", exchange_data
   !write(399 + my_rank, *) "exchange_2_local, ", self%my_map%intpled_data_size
   
@@ -1217,6 +1230,8 @@ subroutine target_2_exchange_buffer(self, target_buffer, exchange_buffer)
   integer :: offset
   integer :: i
 
+  if (size(target_buffer) == 0) return
+  
   num_of_layer = target_buffer(1)%num_of_layer
   
   do i = 1, self%ex_map%num_of_exchange_rank
@@ -1659,7 +1674,7 @@ subroutine write_exchange_class(self, fid)
   implicit none
   class(exchange_class) ::self
   integer, intent(IN)   :: fid
-  integer :: conv_table_size
+  integer :: table_size
   integer :: i
   
   write(fid) self%my_name
@@ -1674,8 +1689,9 @@ subroutine write_exchange_class(self, fid)
   write(fid) self%intpl_flag
   write(fid) self%intpl_mode
 
-  ! write interpolation table
+  !write(0, *) "interpolation table"
   !write(0, *) self%index_size, size(self%send_grid_index), size(self%recv_grid_index), size(self%coef), size(self%target_rank)  
+
   write(fid) self%index_size
   if (self%index_size > 0) then
      write(fid) self%send_grid_index
@@ -1684,13 +1700,25 @@ subroutine write_exchange_class(self, fid)
      write(fid) self%target_rank
   end if
 
-  !write(0, *) self%intpl_flag, self%index_size, size(self%send_conv_table), size(self%recv_conv_table)
+  !write(0, *) self%intpl_flag, self%index_size, associated(self%send_conv_table), size(self%send_conv_table), size(self%recv_conv_table)
 
-  write(fid) size(self%send_conv_table)
-  if (size(self%send_conv_table) > 0) write(fid) self%send_conv_table
+  if (.not.associated(self%send_conv_table)) then
+     table_size = 0
+  else
+     table_size = size(self%send_conv_table)
+  end if
+  
+  write(fid) table_size
+  if (table_size > 0) write(fid) self%send_conv_table
 
-  write(fid) size(self%recv_conv_table)
-  if (size(self%recv_conv_table) > 0) write(fid) self%recv_conv_table
+  if (.not.associated(self%recv_conv_table)) then
+     table_size = 0
+  else
+     table_size = size(self%recv_conv_table)
+  end if
+
+  write(fid) table_size
+  if (table_size > 0) write(fid) self%recv_conv_table
   
   
   ! write 2d parallel interpolation table
@@ -1720,13 +1748,24 @@ subroutine write_exchange_class(self, fid)
 
   write(fid) self%ex_map%exchange_data_size
 
-  conv_table_size = size(self%ex_map%exchange_index)
-  write(fid) conv_table_size
-  if (conv_table_size > 0) write(fid) self%ex_map%exchange_index
 
-  conv_table_size = size(self%ex_map%conv_table)
-  write(fid) conv_table_size
-  if (conv_table_size > 0) write(fid) self%ex_map%conv_table
+  if (.not.associated(self%ex_map%exchange_index)) then
+     table_size = 0
+  else
+     table_size = size(self%ex_map%exchange_index)
+  end if
+  
+  write(fid) table_size
+  if (table_size > 0) write(fid) self%ex_map%exchange_index
+
+  if (.not.associated(self%ex_map%conv_table)) then
+     table_size = 0
+  else
+     table_size = size(self%ex_map%conv_table)
+  end if
+  
+  write(fid) table_size
+  if (table_size > 0) write(fid) self%ex_map%conv_table
 
   ! write send map
   write(fid) self%send_map%intpled_data_size
@@ -1900,6 +1939,8 @@ subroutine interpolate_data_serial(self, send_data, recv_data, num_of_layer, int
   character(len=STR_MID)      :: log_str
   integer :: my_rank
 
+  if (.not.associated(self%conv_table)) return  ! when my rank dose not have interpolation grid, do nothing
+
   call MPI_comm_rank(MPI_COMM_WORLD, my_rank, i)
   
   write(log_str,'("  ",A,I5)') "[interpolate_data] interpolate data START, intpl_tag = ", intpl_tag
@@ -2001,6 +2042,8 @@ subroutine interpolate_data_parallel(self, send_data, recv_data, num_of_layer, i
   character(len=STR_MID)      :: log_str
   integer :: my_rank
 
+  if (.not.associated(self%conv_table)) return  ! when my rank dose not have interpolation grid, do nothing
+  
   call MPI_comm_rank(MPI_COMM_WORLD, my_rank, i)
   
   write(log_str,'("  ",A,I5)') "[interpolate_data] interpolate data START, intpl_tag = ", intpl_tag
