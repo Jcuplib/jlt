@@ -48,6 +48,11 @@ module jlt_utils
 
 !--------------------------------   private  ---------------------------------!
 
+  interface sort_int_1d
+     module procedure sort_int_1d_quick
+  end interface sort_int_1d
+  
+    
   interface IntToStr
     module procedure IntegerToStr, LongIntToStr
   end interface 
@@ -526,7 +531,7 @@ end subroutine cdate_2_idate
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine sort_int_1d(num_of_data, data, data2)
+subroutine sort_int_1d_quick(num_of_data, data, data2)
   implicit none
   integer, intent(IN) :: num_of_data
   integer, intent(INOUT) :: data(num_of_data)
@@ -548,7 +553,7 @@ subroutine sort_int_1d(num_of_data, data, data2)
      call quicksort_int(data, 1, n)
   end if
 
-end subroutine sort_int_1d
+end subroutine sort_int_1d_quick
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
@@ -590,7 +595,95 @@ recursive subroutine quicksort_int(a, left, right, b)
 
     if (left < j) call quicksort_int(a, left, j, b)
     if (i < right) call quicksort_int(a, i, right, b)
+
 end subroutine quicksort_int
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+subroutine sort_int_1d_merge(num_of_data, data, data2)
+  implicit none
+  integer, intent(IN) :: num_of_data
+  integer, intent(INOUT) :: data(num_of_data)
+  integer, optional, intent(INOUT) :: data2(num_of_data)
+
+  if (num_of_data <= 1) return ! 20200514 add
+
+  if (maxval(data) <= 0) return
+  
+  if (present(data2)) then
+     call mergesort_int(data, data2) 
+  else
+     call mergesort_int(data)
+  end if
+
+end subroutine sort_int_1d_merge
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+  recursive subroutine mergesort_int(a, b)
+    integer, intent(inout) :: a(:)
+    integer, intent(inout), optional :: b(:)
+    integer :: n, mid
+    integer, allocatable :: left_a(:), right_a(:)
+    integer, allocatable :: left_b(:), right_b(:)
+    integer :: i, j, k, nL, nR
+
+    n = size(a)
+    if (n <= 1) return
+
+    mid = n / 2
+    nL = mid
+    nR = n - mid
+
+    allocate(left_a(nL), right_a(nR))
+    left_a = a(1:nL)
+    right_a = a(nL+1:n)
+
+    if (present(b)) then
+       allocate(left_b(nL), right_b(nR))
+       left_b = b(1:nL)
+       right_b = b(nL+1:n)
+       call mergesort_int(left_a, left_b)
+       call mergesort_int(right_a, right_b)
+    else
+       call mergesort_int(left_a)
+       call mergesort_int(right_a)
+    end if
+
+    i = 1
+    j = 1
+    k = 1
+
+    do while (i <= nL .and. j <= nR)
+       if (left_a(i) <= right_a(j)) then
+          a(k) = left_a(i)
+          if (present(b)) b(k) = left_b(i)
+          i = i + 1
+       else
+          a(k) = right_a(j)
+          if (present(b)) b(k) = right_b(j)
+          j = j + 1
+       end if
+       k = k + 1
+    end do
+
+    do while (i <= nL)
+       a(k) = left_a(i)
+       if (present(b)) b(k) = left_b(i)
+       i = i + 1
+       k = k + 1
+    end do
+
+    do while (j <= nR)
+       a(k) = right_a(j)
+       if (present(b)) b(k) = right_b(j)
+       j = j + 1
+       k = k + 1
+    end do
+
+    deallocate(left_a, right_a)
+    if (present(b)) deallocate(left_b, right_b)
+
+  end subroutine mergesort_int
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 

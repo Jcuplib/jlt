@@ -1504,6 +1504,7 @@ subroutine recv_data_1d(self, exchange_buffer, exchange_tag)
   !                                                        ", max = ", maxval(exchange_buffer(:,1))
   !   call put_log(trim(log_str))
   !end if
+
   
 end subroutine recv_data_1d
 
@@ -1939,7 +1940,9 @@ subroutine interpolate_data_serial(self, send_data, recv_data, num_of_layer, int
   character(len=STR_MID)      :: log_str
   integer :: my_rank
 
-  if (.not.associated(self%conv_table)) return  ! when my rank dose not have interpolation grid, do nothing
+  !write(0, *) "interpolate_data_serial ", associated(self%conv_table), minval(send_data), maxval(send_data)
+  
+  if (.not.associated(self%recv_conv_table)) return  ! when my rank dose not have interpolation grid, do nothing
 
   call MPI_comm_rank(MPI_COMM_WORLD, my_rank, i)
   

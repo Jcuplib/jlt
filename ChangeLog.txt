@@ -442,6 +442,35 @@ Routines
  
 Detail
  プログラム終了時に、def_gridで作成した格子点番号ファイルとランクファイルを削除するようにした。
+
+-----------------------------------------------------------------
+
+Version:0.030401
+Date:2025/10/22
+
+Files: jlt_exchange_class.f90
+
+Routines
+
+ interpolate_data_serial      : [mod]
+ 
+Detail
+ サブルーチン冒頭の判定ロジックに誤りがあったので修正。
+
+-----------------------------------------------------------------
+
+Version:0.030500
+Date:2025/10/22
+
+Files: jlt_utils.f90
+
+Routines
+
+ mergesort_int                : [add]
+ sort_int_1d_merge            : [add]
+ 
+Detail
+ ソーティングサブルーチンにmerge sortを追加。
  
 
  
