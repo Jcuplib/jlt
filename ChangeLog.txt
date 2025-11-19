@@ -472,6 +472,66 @@ Routines
 Detail
  ソーティングサブルーチンにmerge sortを追加。
  
+-----------------------------------------------------------------
+
+Version:0.030600
+Date:2025/11/04
+
+Files: jlt_exchange_class.f90
+
+Routines
+
+ local_2_exchange             : [mod]
+ exchange_2_local             : [mod]
+ 
+Detail
+ do ループにOpenMPのディレクティブを挿入。
+ 
+-----------------------------------------------------------------
+
+Version:0.030601
+Date:2025/11/04
+
+Files: jlt_exchange_class.f90
+
+Routines
+
+ interpolate_data_parallel    : [mod]
+ 
+Detail
+ OpenMPのディレクティブにselfとmissiong_valueを追加。
+
+-----------------------------------------------------------------
+
+Version:0.030700
+Date:2025/11/04
+
+Files: jlt_utils.f90
+
+Routines
+
+ sort_str_1d                  : [add]
+ binary_search_str            : [add]
+ 
+Detail
+ 文字列に対するsortとbinary searchのサブルーチンを追加。
+
+
+-----------------------------------------------------------------
+
+Version:0.030800
+Date:2025/11/20
+
+Files: jlt_data.f90
+
+Routines
+
+ ensure_capacity              : [add]
+ set_data                     : [mod]
+ 
+Detail
+ 交換データ数が初期値を超えた場合に自動的に配列サイズを拡張するようにした。
+
 
  
  

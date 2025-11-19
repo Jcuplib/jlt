@@ -41,12 +41,12 @@ public :: get_data_2d                       ! subroutine (data_name, data)
 
 !--------------------------------   private  ---------------------------------!
 
-integer, parameter :: MAX_DATA = 140
+integer, parameter :: MAX_DATA = 4
 
 integer :: num_of_send_data = 0
-type(data_class), pointer :: send_data(:)
+type(data_class), allocatable, target :: send_data(:)
 integer :: num_of_recv_data = 0
-type(data_class), pointer :: recv_data(:)
+type(data_class), allocatable, target :: recv_data(:)
 
 character(len=STR_SHORT) :: my_comp
 
@@ -95,17 +95,38 @@ subroutine set_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, 
      if (time_lag == 1) then
         exchange_type = ADVANCE_SEND_RECV
      end if
+     call ensure_capacity(send_data, num_of_send_data)
      call set_send_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, is_avr, intvl, &
                         time_lag, exchange_type, num_of_layer, grid_intpl_tag, fill_value, exchange_tag)
   else
      if (time_lag == 1) then
         exchange_type = BEHIND_SEND_RECV
      end if
+     call ensure_capacity(recv_data, num_of_recv_data)
      call set_recv_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, is_avr, intvl, &
                         time_lag, exchange_type, num_of_layer, grid_intpl_tag, fill_value, exchange_tag)
   end if
   
 end subroutine set_data
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+subroutine ensure_capacity(current_data, num_of_data)
+  ! ensure send_data has enough capacity
+  implicit none
+  type(data_class), allocatable, intent(INOUT) :: current_data(:)
+  integer, intent(IN)       :: num_of_data
+  type(data_class), allocatable :: tmp(:)
+
+  if (num_of_data < size(current_data)) return
+
+  ! grow size (double capacity)
+  allocate(tmp(2 * size(current_data)))
+  tmp(1:size(current_data)) = current_data
+
+  call move_alloc(tmp, current_data)
+
+end subroutine ensure_capacity
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 

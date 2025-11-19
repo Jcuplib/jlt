@@ -31,6 +31,7 @@ module jlt_utils
   public :: IDate2CDate             !
   public :: cdate_2_idate           !
   public :: sort_int_1d             ! subroutine (num_of_data, sort_array, sorted_index)
+  public :: sort_str_1d             ! subroutine (sort_str_array, sorted_index)
   public :: binary_search           ! integer function (data_array, key)
   public :: split_string            !
   public :: TrimString              !
@@ -52,11 +53,19 @@ module jlt_utils
      module procedure sort_int_1d_quick
   end interface sort_int_1d
   
-    
+  interface sort_str_1d
+     module procedure quicksort_str
+  end interface sort_str_1d
+
+  interface binary_search
+     module procedure binary_search_int, binary_search_str
+  end interface binary_search
+  
   interface IntToStr
     module procedure IntegerToStr, LongIntToStr
   end interface 
 
+ 
   ! private constants
   integer,private,parameter :: TIME_STR_LEN = 19
   integer,private,parameter :: STD_IN=5,STD_OUT=6,STD_ERR=0
@@ -884,9 +893,62 @@ subroutine radix_sort_org_org(fig, num_of_data, num1, num2, num3, num4)
 
 end subroutine radix_sort_org_org
 
+!=========================================================
+! quicksort_str: sort character array (ascending order)
+!=========================================================
+subroutine quicksort_str(a, order)
+  implicit none
+  character(len=*), intent(inout) :: a(:)
+  integer, intent(out), optional  :: order(:)
+  integer :: n, i
+  integer, allocatable :: idx(:)
+
+  n = size(a)
+  allocate(idx(n))
+  do i = 1, n
+     idx(i) = i
+  end do
+
+  call qsort(a, idx, 1, n)
+
+  if (present(order)) order = idx
+
+contains
+  recursive subroutine qsort(x, idx, left, right)
+    character(len=*), intent(inout) :: x(:)
+    integer, intent(inout) :: idx(:)
+    integer, intent(in) :: left, right
+    integer :: i, j
+    character(len=len(x(1))) :: pivot, tmp
+    integer :: tmpi
+
+    i = left
+    j = right
+    pivot = x((left+right)/2)
+
+    do
+      do while (x(i) < pivot)
+        i = i + 1
+      end do
+      do while (x(j) > pivot)
+        j = j - 1
+      end do
+      if (i <= j) then
+        tmp = x(i); x(i) = x(j); x(j) = tmp
+        tmpi = idx(i); idx(i) = idx(j); idx(j) = tmpi
+        i = i + 1
+        j = j - 1
+      end if
+      if (i > j) exit
+    end do
+    if (left < j)  call qsort(x, idx, left, j)
+    if (i < right) call qsort(x, idx, i, right)
+  end subroutine qsort
+end subroutine quicksort_str
+
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-function binary_search(data, key) result(res)
+function binary_search_int(data, key) result(res)
   implicit none
   integer, intent(IN) :: data(:)
   integer, intent(IN) :: key
@@ -908,7 +970,55 @@ function binary_search(data, key) result(res)
     end if
   end do
   res = - 1
-end function binary_search
+end function binary_search_int
+
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+!=========================================================
+! binary_search: return index of target in sorted array
+! returns 0 if not found
+!=========================================================
+function binary_search_str(names, target) result(idx)
+  implicit none
+  character(len=*), intent(in) :: names(:)
+  character(len=*), intent(in) :: target
+  integer :: idx
+  integer :: left, right, mid
+  integer :: cmp
+
+  left  = 1
+  right = size(names)
+  idx   = 0
+
+  do while (left <= right)
+    mid = (left + right) / 2
+    cmp = compare(trim(target), trim(names(mid)))
+
+    if (cmp == 0) then
+       idx = mid
+       return
+    else if (cmp < 0) then
+       right = mid - 1
+    else
+       left  = mid + 1
+    end if
+  end do
+
+contains
+  !-------------------------------------------------------
+  ! compare(a, b): returns -1 if a<b, 0 if a==b, 1 if a>b
+  !-------------------------------------------------------
+  pure integer function compare(a, b)
+    character(len=*), intent(in) :: a, b
+    if (a < b) then
+       compare = -1
+    else if (a > b) then
+       compare = 1
+    else
+       compare = 0
+    end if
+  end function compare
+end function binary_search_str
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 

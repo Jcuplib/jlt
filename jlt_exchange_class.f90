@@ -1183,11 +1183,13 @@ subroutine local_2_exchange(self, grid_data, exchange_data)
 
   if (self%is_send_intpl()) then
   !write(0, *) "local to exchange ", jml_GetMyrankGlobal(), size(exchange_data), self%get_exchange_data_size(), self%send_map%conv_table, grid_data
+  !$omp parallel do
   do i = 1, self%get_exchange_data_size()
      exchange_data(i) = grid_data(self%send_map%conv_table(i))
   end do
   else
   !write(0, *) "local to exchange ", jml_GetMyrankGlobal(), size(exchange_data), self%ex_map%exchange_data_size, self%ex_map%conv_table, grid_data
+  !$omp parallel do
   do i = 1, self%ex_map%exchange_data_size
      exchange_data(i) = grid_data(self%ex_map%conv_table(i))
   end do
@@ -1210,7 +1212,8 @@ subroutine exchange_2_local(self, exchange_data, grid_data)
   !call mpi_comm_rank(MPI_COMM_WORLD, my_rank, ierr)
   !write(399 + my_rank, *) "exchange_2_local, ", exchange_data
   !write(399 + my_rank, *) "exchange_2_local, ", self%my_map%intpled_data_size
-  
+
+  !$omp parallel do
   do i = 1, self%my_map%intpled_data_size
     grid_data(self%my_map%conv_table(i)) = exchange_data(i)
     !write(399 + my_rank, *) exchange_data(i), self%my_map%conv_table(i), grid_data(i)
@@ -1999,16 +2002,16 @@ subroutine interpolate_data_serial(self, send_data, recv_data, num_of_layer, int
       deallocate(check_data)
   else ! scalar data
     !write(300+self%recv_comp_id*100 + my_grid%get_my_rank(), *) "interpolation"
-         if (intpl_tag == 14) then
-         write(300+my_grid%get_my_rank(), *) "interpolate_data test write"
-         write(300+my_grid%get_my_rank(), *) size(self%coef)
-         end if
+         !if (intpl_tag == 14) then
+         !write(300+my_grid%get_my_rank(), *) "interpolate_data test write"
+         !write(300+my_grid%get_my_rank(), *) size(self%coef)
+         !end if
     do k = 1, num_of_layer
        do i = 1, size(self%coef)
          recv_data(recv_index(i),k) = recv_data(recv_index(i),k) + send_data(send_index(i),k)*self%coef(i)
-         if (intpl_tag == 14) then
-         write(300+my_grid%get_my_rank(), *) i, send_index(i), recv_index(i), send_data(send_index(i),k), recv_data(recv_index(i),k), self%coef(i)
-         end if
+         !if (intpl_tag == 14) then
+         !write(300+my_grid%get_my_rank(), *) i, send_index(i), recv_index(i), send_data(send_index(i),k), recv_data(recv_index(i),k), self%coef(i)
+         !end if
          !!write(my_rank+300, *) i, send_index(i), recv_index(i), send_data(send_index(i),k), recv_data(recv_index(i),k), self%coef(i)
          !write(300+self%recv_comp_id*100 + my_grid%get_my_rank(), *) i, send_index(i), recv_index(i), send_data(send_index(i),k), recv_data(recv_index(i),k), self%coef(i)
       end do
@@ -2084,7 +2087,7 @@ subroutine interpolate_data_parallel(self, send_data, recv_data, num_of_layer, i
           recv_index => self%conv_table(j)%recv_conv_table
           coef       => self%conv_table(j)%coef
           !$omp parallel do default(none),private(i, send_grid, recv_grid), &
-          !$omp shared(j, n, send_data, recv_data, check_data, weight_data, send_index, recv_index, coef)
+          !$omp shared(self, missing_value, j, n, send_data, recv_data, check_data, weight_data, send_index, recv_index, coef)
           do i = 1, size(self%conv_table(j)%coef)
              send_grid = send_index(i)
              recv_grid = recv_index(i)
@@ -2119,7 +2122,7 @@ subroutine interpolate_data_parallel(self, send_data, recv_data, num_of_layer, i
           recv_index => self%conv_table(j)%recv_conv_table
           coef       => self%conv_table(j)%coef
           !$omp parallel do default(none),private(i), &
-          !$omp shared(j, k, send_data, recv_data, send_index, recv_index, coef)
+          !$omp shared(self, missing_value, j, k, send_data, recv_data, send_index, recv_index, coef)
           do i = 1, size(self%conv_table(j)%coef)
              recv_data(recv_index(i),k) = recv_data(recv_index(i),k) + send_data(send_index(i),k) * coef(i)
          !if (intpl_tag == 14) then
