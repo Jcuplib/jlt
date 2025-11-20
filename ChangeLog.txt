@@ -532,6 +532,20 @@ Routines
 Detail
  交換データ数が初期値を超えた場合に自動的に配列サイズを拡張するようにした。
 
+-----------------------------------------------------------------
+
+Version:0.030900
+Date:2025/11/20
+
+Files: jlt_remapping.f90, jlt_exchange_class.f90, jlt_exchange.f90, jlt_data_class.f90
+
+Routines
+
+ 多くのサブルーチン群         : [mod]
+ 
+Detail
+ pointerで宣言していた動的配列をallocatableに変更。
+
 
  
  

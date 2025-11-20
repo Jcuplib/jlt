@@ -555,12 +555,12 @@ subroutine make_local_mapping_table_no_sort(global_index, global_target, global_
   real(kind=8), intent(IN) :: global_coef(:)
   integer, intent(IN)      :: grid_index(:)
   integer, intent(OUT)     :: local_size
-  integer, pointer         :: local_index(:), local_target(:)
-  real(kind=8), pointer    :: local_coef(:)
-  integer, pointer         :: sorted_index(:), sorted_pos(:)
-  integer, pointer         :: sorted_target(:)
-  real(kind=8), pointer    :: sorted_coef(:)
-  integer, pointer         :: sorted_grid_index(:)
+  integer, allocatable, intent(OUT)     :: local_index(:), local_target(:)
+  real(kind=8), allocatable, intent(OUT) :: local_coef(:)
+  integer, allocatable     :: sorted_index(:), sorted_pos(:)
+  integer, allocatable     :: sorted_target(:)
+  real(kind=8), allocatable :: sorted_coef(:)
+  integer, allocatable      :: sorted_grid_index(:)
   integer                  :: table_size
   integer                  :: current_pos, counter
   integer                  :: res
@@ -593,12 +593,12 @@ subroutine make_local_mapping_table_no_sort(global_index, global_target, global_
 
   local_size = counter
 
-  if (local_size == 0) then
-     local_index  => null()
-     local_target => null()
-     local_coef   => null()
-     return
-  end if
+  !if (local_size == 0) then
+  !   local_index  => null()
+  !   local_target => null()
+  !   local_coef   => null()
+  !   return
+  !end if
 
   allocate(local_index(local_size))
   allocate(local_target(local_size))
@@ -751,10 +751,10 @@ subroutine make_local_mapping_table(global_index, global_target, global_coef, &
   real(kind=8), intent(IN) :: global_coef(:)
   integer, intent(IN)      :: grid_index(:)
   integer, intent(OUT)     :: local_size
-  integer, pointer         :: local_index(:), local_target(:)
-  real(kind=8), pointer    :: local_coef(:)
-  integer, pointer         :: sorted_index(:), sorted_pos(:)
-  integer, pointer         :: sorted_grid_index(:)
+  integer, allocatable, intent(OUT) :: local_index(:), local_target(:)
+  real(kind=8), allocatable, intent(OUT) :: local_coef(:)
+  integer, allocatable     :: sorted_index(:), sorted_pos(:)
+  integer, allocatable     :: sorted_grid_index(:)
   integer                  :: table_size
   integer                  :: current_pos, counter
   integer                  :: res
@@ -898,14 +898,14 @@ subroutine make_exchange_table(target_rank, local_table, num_of_rank, exchange_r
   integer, intent(IN)  :: target_rank(:)        ! ordered target rank array
   integer, intent(IN)  :: local_table(:)        ! local remapping table of exchange grid
   integer, intent(OUT) :: num_of_rank           ! different rank
-  integer, pointer     :: exchange_rank(:)      ! exchange rank array
-  integer, pointer     :: num_of_index(:)       ! num of exchange index by each rank
-  integer, pointer     :: offset(:)             ! offset address
-  integer, pointer     :: exchange_index(:)     ! exchange index array
-  integer, pointer     :: num_of_all_index(:)   ! num of exchange index by each rank
+  integer, allocatable, intent(OUT) :: exchange_rank(:)      ! exchange rank array
+  integer, allocatable, intent(OUT) :: num_of_index(:)       ! num of exchange index by each rank
+  integer, allocatable, intent(OUT) :: offset(:)             ! offset address
+  integer, allocatable, intent(OUT) :: exchange_index(:)     ! exchange index array
+  integer, allocatable :: num_of_all_index(:)   ! num of exchange index by each rank
   integer, allocatable :: temp_index(:)
   integer, allocatable :: same_rank_index(:)
-  integer, pointer     :: different_index_array(:)
+  integer, allocatable :: different_index_array(:)
   integer              :: is, ie, counter 
   integer              :: i, j
 
@@ -983,7 +983,7 @@ subroutine delete_same_index(index_in, index_out)
   use jlt_utils, only : sort_int_1d
   implicit none
   integer, intent(IN)  :: index_in(:)
-  integer, pointer     :: index_out(:)
+  integer, allocatable, intent(OUT) :: index_out(:)
   integer, allocatable :: sorted_index(:)
   integer              :: table_size
   integer              :: i, counter
@@ -1026,11 +1026,11 @@ subroutine make_conversion_table(remapping_index, grid_index, conv_table)
   use jlt_utils, only : sort_int_1d, binary_search
   use mpi
   implicit none
-  integer, pointer    :: remapping_index(:)  ! local remapping table
-  integer, pointer    :: grid_index(:)       ! data grid index
-  integer, pointer    :: conv_table(:)       ! conversion table from interpolation index i to data grid index
-  integer, pointer    :: sorted_index(:)
-  integer, pointer    :: sorted_pos(:)
+  integer, intent(IN) :: remapping_index(:)  ! local remapping table
+  integer, intent(IN) :: grid_index(:)       ! data grid index
+  integer, allocatable, intent(OUT) :: conv_table(:)       ! conversion table from interpolation index i to data grid index
+  integer, allocatable :: sorted_index(:)
+  integer, allocatable :: sorted_pos(:)
   integer             :: res
   integer             :: i
   integer :: my_rank, ierr

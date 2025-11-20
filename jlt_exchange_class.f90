@@ -21,31 +21,31 @@ module jlt_exchange_class
   type exchange_map_info
      ! local exchange table
      integer                       :: num_of_exchange_rank = 0 ! number of exchange target rank
-     integer, pointer              :: exchange_rank(:)         ! target rank 
-     integer, pointer              :: num_of_exchange(:)       ! number of exchange index of each target rank
-     integer, pointer              :: offset(:)                ! offset address 
+     integer, allocatable          :: exchange_rank(:)         ! target rank 
+     integer, allocatable          :: num_of_exchange(:)       ! number of exchange index of each target rank
+     integer, allocatable          :: offset(:)                ! offset address 
      integer                       :: exchange_data_size = 0   ! 
-     integer, pointer              :: exchange_index(:)        ! local index array for data exchange
-     integer, pointer              :: conv_table(:)            ! conersion table from grid array to exchange array (valid only send side)
+     integer, allocatable          :: exchange_index(:)        ! local index array for data exchange
+     integer, allocatable          :: conv_table(:)            ! conersion table from grid array to exchange array (valid only send side)
   end type exchange_map_info
 
   type send_map_info
      integer                       :: intpled_data_size = 0    ! data size of interpolation
-     integer, pointer              :: intpled_index(:)         ! interpolation data index
-     integer, pointer              :: conv_table(:)            ! conversion table from grid array to interpolation data array
+     integer, allocatable          :: intpled_index(:)         ! interpolation data index
+     integer, allocatable          :: conv_table(:)            ! conversion table from grid array to interpolation data array
   end type send_map_info
   
   type recv_map_info
      integer                       :: intpled_data_size = 0    ! interpolated data size
-     integer, pointer              :: intpled_index(:)         ! interpolation data index
-     integer, pointer              :: conv_table(:)            ! conversion table from interpolated data array to grid array 
+     integer, allocatable          :: intpled_index(:)         ! interpolation data index
+     integer, allocatable          :: conv_table(:)            ! conversion table from interpolated data array to grid array 
   end type recv_map_info
 
   type conv_table_2d
      integer                       :: table_size = 0 
-     integer, pointer              :: send_conv_table(:)
-     integer, pointer              :: recv_conv_table(:)
-     real(kind=8), pointer         :: coef(:)
+     integer, allocatable          :: send_conv_table(:)
+     integer, allocatable          :: recv_conv_table(:)
+     real(kind=8), allocatable     :: coef(:)
   end type conv_table_2d
   
   type exchange_class
@@ -60,17 +60,17 @@ module jlt_exchange_class
      integer                       :: recv_comp_id
      ! local remapping table
      integer                       :: index_size = 0       ! local_index_size
-     integer, pointer              :: send_grid_index(:)   ! local index 
-     integer, pointer              :: recv_grid_index(:)   ! local index
-     real(kind=8), pointer         :: coef(:)              ! local coef
-     integer, pointer              :: target_rank(:)       ! local target rank
+     integer, allocatable          :: send_grid_index(:)   ! local index 
+     integer, allocatable          :: recv_grid_index(:)   ! local index
+     real(kind=8), allocatable     :: coef(:)              ! local coef
+     integer, allocatable          :: target_rank(:)       ! local target rank
      ! array of conversion table for interpolation 
-     integer, pointer              :: send_conv_table(:)   ! conv. table from interpolation index to send grid index
-     integer, pointer              :: recv_conv_table(:)   ! conv. table from interpolation index to recv grid index
+     integer, allocatable          :: send_conv_table(:)   ! conv. table from interpolation index to send grid index
+     integer, allocatable          :: recv_conv_table(:)   ! conv. table from interpolation index to recv grid index
 
      ! array of conversion table for 2d parallel interpolation
      integer                       :: conv_table_size = 0
-     type(conv_table_2d), pointer  :: conv_table(:)        ! 2d parallel interpolation table size
+     type(conv_table_2d), allocatable :: conv_table(:)        ! 2d parallel interpolation table size
      
      type(exchange_map_info)       :: ex_map
      type(send_map_info)           :: send_map                        ! varid for send side interpolation
@@ -538,7 +538,7 @@ subroutine make_grid_conv_table(grid_index, exchange_index, conv_table)
   implicit none
   integer, intent(IN)  :: grid_index(:)
   integer, intent(IN)  :: exchange_index(:)
-  integer, pointer     :: conv_table(:)
+  integer, allocatable, intent(OUT) :: conv_table(:)
   integer, allocatable :: sorted_index(:)
   integer, allocatable :: sorted_pos(:)
   integer              :: res
@@ -780,11 +780,11 @@ end subroutine recv_send_grid_index
 subroutine sort_conversion_table(send_index_table, send_conv_table, recv_index_table, recv_conv_table, coef)
   use jlt_utils, only : sort_int_1d, binary_search
   implicit none
-  integer, pointer :: send_index_table(:)
-  integer, pointer :: send_conv_table(:)
-  integer, pointer :: recv_index_table(:)
-  integer, pointer :: recv_conv_table(:)
-  real(kind=8), pointer :: coef(:)
+  integer, allocatable :: send_index_table(:)
+  integer, allocatable :: send_conv_table(:)
+  integer, allocatable :: recv_index_table(:)
+  integer, allocatable :: recv_conv_table(:)
+  real(kind=8), allocatable :: coef(:)
   integer, allocatable :: sorted_index(:), sorted_pos(:)
   real(kind=8), allocatable :: double_temp(:)
   integer :: i
@@ -837,10 +837,10 @@ end subroutine sort_conversion_table
 !sort other tables based on the global grid point indices on the sending side (send_index_table).
 subroutine reorder_conversion_table(send_index_table, send_conv_table, recv_conv_table, coef)
   implicit none
-  integer, pointer :: send_index_table(:)
-  integer, pointer :: send_conv_table(:)
-  integer, pointer :: recv_conv_table(:)
-  real(kind=8), pointer :: coef(:)
+  integer, allocatable, target :: send_index_table(:)
+  integer, allocatable, target :: send_conv_table(:)
+  integer, allocatable, target :: recv_conv_table(:)
+  real(kind=8), allocatable, target :: coef(:)
   integer, pointer :: send_index_ptr(:)
   integer, pointer :: send_conv_ptr(:)
   real(kind=8), pointer :: coef_ptr(:)
@@ -927,7 +927,7 @@ subroutine make_parallel_interpolation_table(send_1d, recv_1d, coef_1d, conv_tab
   integer, intent(IN)          :: recv_1d(:)
   real(kind=8), intent(IN)     :: coef_1d(:)
   integer, intent(OUT)         :: conv_table_size
-  type(conv_table_2d), pointer :: conv_table(:)
+  type(conv_table_2d), allocatable :: conv_table(:)
 
   integer, allocatable :: parallel_index(:,:)
   integer, allocatable :: index_pointer(:)
@@ -1255,7 +1255,7 @@ subroutine send_data_1d(self, data, exchange_buffer, intpl_tag, exchange_tag)
   implicit none
   class(exchange_class)       :: self
   real(kind=8), intent(IN)    :: data(:)
-  real(kind=8), pointer       :: exchange_buffer(:,:)
+  real(kind=8), allocatable, target :: exchange_buffer(:,:)
   integer, intent(IN)         :: intpl_tag
   integer, intent(IN)         :: exchange_tag
   real(kind=8), pointer       :: send_data(:,:)
@@ -1473,7 +1473,7 @@ subroutine recv_data_1d(self, exchange_buffer, exchange_tag)
   use jlt_mpi_lib, only : jml_IrecvModel2, jml_recv_waitall
   implicit none
   class(exchange_class)       :: self
-  real(kind=8), pointer       :: exchange_buffer(:,:)
+  real(kind=8), allocatable, target :: exchange_buffer(:,:)
   integer, intent(IN)         :: exchange_tag
   character(len=STR_MID)      :: log_str
   integer                     :: target_rank
@@ -1704,9 +1704,9 @@ subroutine write_exchange_class(self, fid)
      write(fid) self%target_rank
   end if
 
-  !write(0, *) self%intpl_flag, self%index_size, associated(self%send_conv_table), size(self%send_conv_table), size(self%recv_conv_table)
+  !write(0, *) self%intpl_flag, self%index_size, allocated(self%send_conv_table), size(self%send_conv_table), size(self%recv_conv_table)
 
-  if (.not.associated(self%send_conv_table)) then
+  if (.not.allocated(self%send_conv_table)) then
      table_size = 0
   else
      table_size = size(self%send_conv_table)
@@ -1715,7 +1715,7 @@ subroutine write_exchange_class(self, fid)
   write(fid) table_size
   if (table_size > 0) write(fid) self%send_conv_table
 
-  if (.not.associated(self%recv_conv_table)) then
+  if (.not.allocated(self%recv_conv_table)) then
      table_size = 0
   else
      table_size = size(self%recv_conv_table)
@@ -1753,7 +1753,7 @@ subroutine write_exchange_class(self, fid)
   write(fid) self%ex_map%exchange_data_size
 
 
-  if (.not.associated(self%ex_map%exchange_index)) then
+  if (.not.allocated(self%ex_map%exchange_index)) then
      table_size = 0
   else
      table_size = size(self%ex_map%exchange_index)
@@ -1762,7 +1762,7 @@ subroutine write_exchange_class(self, fid)
   write(fid) table_size
   if (table_size > 0) write(fid) self%ex_map%exchange_index
 
-  if (.not.associated(self%ex_map%conv_table)) then
+  if (.not.allocated(self%ex_map%conv_table)) then
      table_size = 0
   else
      table_size = size(self%ex_map%conv_table)
@@ -1943,9 +1943,9 @@ subroutine interpolate_data_serial(self, send_data, recv_data, num_of_layer, int
   character(len=STR_MID)      :: log_str
   integer :: my_rank
 
-  !write(0, *) "interpolate_data_serial ", associated(self%conv_table), minval(send_data), maxval(send_data)
+  !write(0, *) "interpolate_data_serial ", allocated(self%conv_table), minval(send_data), maxval(send_data)
   
-  if (.not.associated(self%recv_conv_table)) return  ! when my rank dose not have interpolation grid, do nothing
+  if (.not.allocated(self%recv_conv_table)) return  ! when my rank dose not have interpolation grid, do nothing
 
   call MPI_comm_rank(MPI_COMM_WORLD, my_rank, i)
   
@@ -1960,8 +1960,8 @@ subroutine interpolate_data_serial(self, send_data, recv_data, num_of_layer, int
   
   recv_data(:,:) = 0.d0
 
-  send_index => self%send_conv_table
-  recv_index => self%recv_conv_table
+  !send_index => self%send_conv_table
+  !recv_index => self%recv_conv_table
   
   !write(300+self%recv_comp_id*100 + my_grid%get_my_rank(), *) "interpolate_data ", num_of_layer, self%my_map%get_intpl_size(), size(recv_index), size(send_index)
   !write(300+self%recv_comp_id*100 + my_grid%get_my_rank(), *) "interpolate_data ", size(recv_data, 1), size(send_data,1), minval(send_index), maxval(send_index),&
@@ -1980,8 +1980,8 @@ subroutine interpolate_data_serial(self, send_data, recv_data, num_of_layer, int
         weight_data(:) = 0.d0
         check_data(:) = 0
         do i = 1, size(self%coef)
-          send_grid = send_index(i)
-           recv_grid = recv_index(i)
+           send_grid = self%send_conv_table(i)
+           recv_grid = self%recv_conv_table(i)
            if (send_data(send_grid, n) == missing_value) then
               check_data(recv_grid) = 1
            else
@@ -2008,8 +2008,10 @@ subroutine interpolate_data_serial(self, send_data, recv_data, num_of_layer, int
          !end if
     do k = 1, num_of_layer
        do i = 1, size(self%coef)
-         recv_data(recv_index(i),k) = recv_data(recv_index(i),k) + send_data(send_index(i),k)*self%coef(i)
-         !if (intpl_tag == 14) then
+          send_grid = self%send_conv_table(i)
+          recv_grid = self%recv_conv_table(i)
+          recv_data(recv_grid, k) = recv_data(recv_grid, k) + send_data(send_grid, k)*self%coef(i)
+          !if (intpl_tag == 14) then
          !write(300+my_grid%get_my_rank(), *) i, send_index(i), recv_index(i), send_data(send_index(i),k), recv_data(recv_index(i),k), self%coef(i)
          !end if
          !!write(my_rank+300, *) i, send_index(i), recv_index(i), send_data(send_index(i),k), recv_data(recv_index(i),k), self%coef(i)
@@ -2048,7 +2050,7 @@ subroutine interpolate_data_parallel(self, send_data, recv_data, num_of_layer, i
   character(len=STR_MID)      :: log_str
   integer :: my_rank
 
-  if (.not.associated(self%conv_table)) return  ! when my rank dose not have interpolation grid, do nothing
+  if (.not.allocated(self%conv_table)) return  ! when my rank dose not have interpolation grid, do nothing
   
   call MPI_comm_rank(MPI_COMM_WORLD, my_rank, i)
   
@@ -2063,8 +2065,8 @@ subroutine interpolate_data_parallel(self, send_data, recv_data, num_of_layer, i
   
   recv_data(:,:) = 0.d0
 
-  send_index => self%send_conv_table
-  recv_index => self%recv_conv_table
+  !send_index => self%send_conv_table
+  !recv_index => self%recv_conv_table
   
   !write(300+self%recv_comp_id*100 + my_grid%get_my_rank(), *) "interpolate_data ", num_of_layer, self%my_map%get_intpl_size(), size(recv_index), size(send_index)
   !write(300+self%recv_comp_id*100 + my_grid%get_my_rank(), *) "interpolate_data ", size(recv_data, 1), size(send_data,1), minval(send_index), maxval(send_index),&
@@ -2083,19 +2085,19 @@ subroutine interpolate_data_parallel(self, send_data, recv_data, num_of_layer, i
         weight_data(:) = 0.d0
         check_data(:) = 0
         do j = 1, size(self%conv_table)
-          send_index => self%conv_table(j)%send_conv_table
-          recv_index => self%conv_table(j)%recv_conv_table
-          coef       => self%conv_table(j)%coef
+          !send_index => self%conv_table(j)%send_conv_table
+          !recv_index => self%conv_table(j)%recv_conv_table
+          !coef       => self%conv_table(j)%coef
           !$omp parallel do default(none),private(i, send_grid, recv_grid), &
           !$omp shared(self, missing_value, j, n, send_data, recv_data, check_data, weight_data, send_index, recv_index, coef)
           do i = 1, size(self%conv_table(j)%coef)
-             send_grid = send_index(i)
-             recv_grid = recv_index(i)
+             send_grid = self%conv_table(j)%send_conv_table(i)
+             recv_grid = self%conv_table(j)%recv_conv_table(i)
              if (send_data(send_grid, n) == missing_value) then
                 check_data(recv_grid) = 1
              else
-                recv_data(recv_grid, n) = recv_data(recv_grid, n) + send_data(send_grid, n) * coef(i)
-                weight_data(recv_grid) = weight_data(recv_grid) + self%coef(i)
+                recv_data(recv_grid, n) = recv_data(recv_grid, n) + send_data(send_grid, n) * self%conv_table(j)%coef(i)
+                weight_data(recv_grid) = weight_data(recv_grid) + self%conv_table(j)%coef(i)
              end if
           end do
         end do
@@ -2118,13 +2120,15 @@ subroutine interpolate_data_parallel(self, send_data, recv_data, num_of_layer, i
          !end if
     do k = 1, num_of_layer
        do j = 1, size(self%conv_table)
-          send_index => self%conv_table(j)%send_conv_table
-          recv_index => self%conv_table(j)%recv_conv_table
-          coef       => self%conv_table(j)%coef
+          !send_index => self%conv_table(j)%send_conv_table
+          !recv_index => self%conv_table(j)%recv_conv_table
+          !coef       => self%conv_table(j)%coef
+          send_grid = self%conv_table(j)%send_conv_table(i)
+          recv_grid = self%conv_table(j)%recv_conv_table(i)
           !$omp parallel do default(none),private(i), &
           !$omp shared(self, missing_value, j, k, send_data, recv_data, send_index, recv_index, coef)
           do i = 1, size(self%conv_table(j)%coef)
-             recv_data(recv_index(i),k) = recv_data(recv_index(i),k) + send_data(send_index(i),k) * coef(i)
+             recv_data(recv_grid, k) = recv_data(recv_grid, k) + send_data(send_grid, k) * self%conv_table(j)%coef(i)
          !if (intpl_tag == 14) then
          !write(300+my_grid%get_my_rank(), *) i, send_index(i), recv_index(i), send_data(send_index(i),k), recv_data(recv_index(i),k), self%coef(i)
          !end if

@@ -19,7 +19,7 @@ module jlt_exchange
   integer, parameter :: MAX_EXCHANGE = 8
   integer :: num_of_exchange
   
-  type(exchange_class), pointer :: exchange(:)
+  type(exchange_class), allocatable, target :: exchange(:)
 
   interface get_exchange_ptr
      module procedure get_exchange_ptr_name, get_exchange_ptr_num
@@ -42,6 +42,8 @@ end subroutine init_exchange
 subroutine set_mapping_table(my_name, send_comp_name, send_grid_name, recv_comp_name, recv_grid_name, &
                              map_tag, intpl_flag, intpl_mode, send_grid, recv_grid, coef)
   use jlt_grid, only : get_grid_ptr
+  use jlt_utils, only : error
+  
   implicit none
   character(len=*), intent(IN) :: my_name
   character(len=*), intent(IN) :: send_comp_name, send_grid_name
@@ -54,6 +56,10 @@ subroutine set_mapping_table(my_name, send_comp_name, send_grid_name, recv_comp_
 
   num_of_exchange = num_of_exchange + 1
 
+  if (num_of_exchange > MAX_EXCHANGE) then
+     call error("set_mapping_table", "num_of_exchange exceeded MAX_EXCHANGE. Please increase MAX_EXCHANGE")
+  end if
+  
   exchange(num_of_exchange) = exchange_class(trim(my_name), intpl_flag, intpl_mode)
 
   call exchange(num_of_exchange)%set_mapping_table(trim(send_comp_name), trim(send_grid_name), &

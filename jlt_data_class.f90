@@ -12,34 +12,34 @@ public :: data_class
 
 type data_class
    private
-   character(len=STR_SHORT)      :: my_name
-   character(len=STR_SHORT)      :: send_comp_name
-   character(len=STR_SHORT)      :: send_grid_name
-   character(len=STR_SHORT)      :: send_data_name
-   character(len=STR_SHORT)      :: recv_comp_name
-   character(len=STR_SHORT)      :: recv_grid_name
-   character(len=STR_SHORT)      :: recv_data_name
-   type(exchange_class), pointer :: my_exchange
-   logical                       :: avr_flag               ! average data or not
-   integer                       :: intvl                  ! exchange interval (SEC)
-   integer                       :: time_lag               ! exchange time lag (-1, 1, 0)
-   integer                       :: exchange_type          ! CONCURRENT_SEND_RECV, ADVANCE_SEND_RECV, BEHIND_SEND_RECV, IMMEDIATE_SEND_RECV
-   integer                       :: num_of_layer = 1       !
-   real(kind=8)                  :: offset = 0.d0          ! offset value used in get_data
-   real(kind=8)                  :: factor = 1.d0          ! factor value used in get_data
-   integer                       :: grid_intpl_tag         ! grid interpolation tag used in the interpolation subroutine
-   integer                       :: exchange_tag           ! MPI data exchange tag
-   integer                       :: exchange_data_size     ! size of exchange data 
-   integer                       :: exchange_buffer_size   ! size of received data before interpolation
-   real(kind=8)                  :: fill_value             ! 
-   real(kind=8), pointer         :: data1d(:)              ! exchange  data buffer, size = exchange_data_size
-   real(kind=8), pointer         :: data1d_tmp(:)          ! averaging data buffer, size = exchange_data_size
-   real(kind=8), pointer         :: data2d(:,:)            ! exchange  data buffer, size = (exchange_array_size, num_of_layer)
-   real(kind=8), pointer         :: weight2d(:,:)          ! avaraging weight (exchange_array_size, num_of_layer)
-   real(kind=8), pointer         :: exchange_buffer(:,:)   ! received data buffer of exchange data
-   integer(kind=8)               :: put_sec                ! time of put data
-   integer                       :: num_of_target          ! number of exchange target process
-   type(buffer_class), pointer   :: exchange_target(:)     ! array of exchange data buffer
+   character(len=STR_SHORT)        :: my_name
+   character(len=STR_SHORT)        :: send_comp_name
+   character(len=STR_SHORT)        :: send_grid_name
+   character(len=STR_SHORT)        :: send_data_name
+   character(len=STR_SHORT)        :: recv_comp_name
+   character(len=STR_SHORT)        :: recv_grid_name
+   character(len=STR_SHORT)        :: recv_data_name
+   type(exchange_class), pointer   :: my_exchange
+   logical                         :: avr_flag               ! average data or not
+   integer                         :: intvl                  ! exchange interval (SEC)
+   integer                         :: time_lag               ! exchange time lag (-1, 1, 0)
+   integer                         :: exchange_type          ! CONCURRENT_SEND_RECV, ADVANCE_SEND_RECV, BEHIND_SEND_RECV, IMMEDIATE_SEND_RECV
+   integer                         :: num_of_layer = 1       !
+   real(kind=8)                    :: offset = 0.d0          ! offset value used in get_data
+   real(kind=8)                    :: factor = 1.d0          ! factor value used in get_data
+   integer                         :: grid_intpl_tag         ! grid interpolation tag used in the interpolation subroutine
+   integer                         :: exchange_tag           ! MPI data exchange tag
+   integer                         :: exchange_data_size     ! size of exchange data 
+   integer                         :: exchange_buffer_size   ! size of received data before interpolation
+   real(kind=8)                    :: fill_value             ! 
+   real(kind=8), allocatable       :: data1d(:)              ! exchange  data buffer, size = exchange_data_size
+   real(kind=8), allocatable       :: data1d_tmp(:)          ! averaging data buffer, size = exchange_data_size
+   real(kind=8), allocatable       :: data2d(:,:)            ! exchange  data buffer, size = (exchange_array_size, num_of_layer)
+   real(kind=8), allocatable       :: weight2d(:,:)          ! avaraging weight (exchange_array_size, num_of_layer)
+   real(kind=8), allocatable       :: exchange_buffer(:,:)   ! received data buffer of exchange data
+   integer(kind=8)                 :: put_sec                ! time of put data
+   integer                         :: num_of_target          ! number of exchange target process
+   type(buffer_class), allocatable :: exchange_target(:)     ! array of exchange data buffer
  contains
    procedure :: set_my_exchange     ! subroutine (send_comp, send_grid, recv_comp, recv_grid)
    procedure :: get_my_exchange     ! type(exchange_class), pointer function ()
@@ -642,8 +642,8 @@ end subroutine recv_data_2d
 subroutine interpolate_data_1d(self)
   use mpi
   implicit none
-  class(data_class)        :: self
-  real(kind=8), pointer    :: intpl_data(:,:)
+  class(data_class)         :: self
+  real(kind=8), allocatable :: intpl_data(:,:)
 
   integer :: my_rank, ierr
   
