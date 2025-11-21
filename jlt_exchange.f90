@@ -10,7 +10,8 @@ module jlt_exchange
                                               !             map_tag, intpl_flag, send_grid, recv_grid, coef)
   public :: get_num_of_exchange               ! integer function ()
   public :: is_exchange_assigned              ! logical function (send_comp_name, send_grid_name, recv_comp_name, recv_grid_name)
-  public :: get_exchange_ptr                  ! type(exchange_type), pointer, function (send_comp_name, send_grid_name, recv_comp_name, recv_grid_name)
+  public :: get_exchange_ptr                  ! type(exchange_type), pointer, function (send_comp_name, send_grid_name,
+                                              !                                         recv_comp_name, recv_grid_name, intpl_tag)
   public :: write_exchange                    ! subroutine (fid)
   public :: read_exchange                     ! subroutine (fid)
 
@@ -81,16 +82,17 @@ end function get_num_of_exchange
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
 function is_exchange_assigned(send_comp_name, send_grid_name, &
-                              recv_comp_name, recv_grid_name) result (res)
+                              recv_comp_name, recv_grid_name, map_tag) result (res)
   implicit none
   character(len=*), intent(IN) :: send_comp_name, send_grid_name
   character(len=*), intent(IN) :: recv_comp_name, recv_grid_name
+  integer, intent(IN)          :: map_tag
   logical :: res
   integer :: i
 
   do i = 1, num_of_exchange
      if (exchange(i)%is_my_exchange(send_comp_name, send_grid_name, &
-                                    recv_comp_name, recv_grid_name)) then
+                                    recv_comp_name, recv_grid_name, map_tag)) then
         res = .true.
         return
      end if
@@ -103,17 +105,18 @@ end function is_exchange_assigned
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
 function get_exchange_ptr_name(send_comp_name, send_grid_name, &
-                          recv_comp_name, recv_grid_name) result (res)
+                          recv_comp_name, recv_grid_name, map_tag) result (res)
   use jlt_utils, only : error
   implicit none
   character(len=*), intent(IN) :: send_comp_name, send_grid_name
   character(len=*), intent(IN) :: recv_comp_name, recv_grid_name
+  integer, intent(IN)          :: map_tag
   type(exchange_class), pointer :: res
   integer :: i
 
   do i = 1, num_of_exchange
      if (exchange(i)%is_my_exchange(send_comp_name, send_grid_name, &
-                                    recv_comp_name, recv_grid_name)) then
+                                    recv_comp_name, recv_grid_name, map_tag)) then
         res => exchange(i)
         return
      end if

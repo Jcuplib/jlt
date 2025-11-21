@@ -129,17 +129,18 @@ end function init_data_class
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
 subroutine set_my_exchange(self, send_comp_name, send_grid_name, &
-                                 recv_comp_name, recv_grid_name)
+                                 recv_comp_name, recv_grid_name, map_tag)
   use jlt_exchange, only : get_exchange_ptr
   implicit none
   class(data_class)            :: self
   character(len=*), intent(IN) :: send_comp_name, send_grid_name
   character(len=*), intent(IN) :: recv_comp_name, recv_grid_name
+  integer, intent(IN)          :: map_tag
   integer :: global_exchange_size
   integer :: i
   
   self%my_exchange => get_exchange_ptr(send_comp_name, send_grid_name, &
-                                       recv_comp_name, recv_grid_name)
+                                       recv_comp_name, recv_grid_name, map_tag)
 
   if (trim(self%my_exchange%get_my_name()) == trim(send_comp_name)) then
      self%my_name = trim(self%send_data_name)

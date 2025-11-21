@@ -68,13 +68,14 @@ end subroutine init_data
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
 
-subroutine set_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, is_avr, intvl, time_lag, num_of_layer, &
+subroutine set_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, map_tag, is_avr, intvl, time_lag, num_of_layer, &
                     grid_intpl_tag, fill_value, exchange_tag)
   use jlt_utils, only : put_log
   use jlt_constant, only : CONCURRENT_SEND_RECV, ADVANCE_SEND_RECV, BEHIND_SEND_RECV, IMMEDIATE_SEND_RECV
   implicit none
   character(len=*), intent(IN) :: send_comp, send_grid, send_data_name
   character(len=*), intent(IN) :: recv_comp, recv_grid, recv_data_name
+  integer, intent(IN)          :: map_tag
   logical, intent(IN)          :: is_avr
   integer, intent(IN)          :: intvl
   integer, intent(IN)          :: time_lag
@@ -96,14 +97,14 @@ subroutine set_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, 
         exchange_type = ADVANCE_SEND_RECV
      end if
      call ensure_capacity(send_data, num_of_send_data)
-     call set_send_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, is_avr, intvl, &
+     call set_send_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, map_tag, is_avr, intvl, &
                         time_lag, exchange_type, num_of_layer, grid_intpl_tag, fill_value, exchange_tag)
   else
      if (time_lag == 1) then
         exchange_type = BEHIND_SEND_RECV
      end if
      call ensure_capacity(recv_data, num_of_recv_data)
-     call set_recv_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, is_avr, intvl, &
+     call set_recv_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, map_tag, is_avr, intvl, &
                         time_lag, exchange_type, num_of_layer, grid_intpl_tag, fill_value, exchange_tag)
   end if
   
@@ -130,7 +131,7 @@ end subroutine ensure_capacity
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine set_send_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, is_avr, &
+subroutine set_send_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, map_tag, is_avr, &
                          intvl, exchange_type, time_lag, num_of_layer, &
                          grid_intpl_tag, fill_value, exchange_tag)
   use jlt_utils, only : put_log
@@ -138,6 +139,7 @@ subroutine set_send_data(send_comp, send_grid, send_data_name, recv_comp, recv_g
   implicit none
   character(len=*), intent(IN) :: send_comp, send_grid, send_data_name
   character(len=*), intent(IN) :: recv_comp, recv_grid, recv_data_name
+  integer, intent(IN)          :: map_tag
   logical, intent(IN)          :: is_avr
   integer, intent(IN)          :: intvl
   integer, intent(IN)          :: time_lag
@@ -163,16 +165,16 @@ subroutine set_send_data(send_comp, send_grid, send_data_name, recv_comp, recv_g
                                            is_avr, intvl, exchange_type, time_lag, num_of_layer, &
                                            grid_intpl_tag, fill_value, exchange_tag)
 
-  if (is_exchange_assigned(send_comp, send_grid, recv_comp, recv_grid)) then
+  if (is_exchange_assigned(send_comp, send_grid, recv_comp, recv_grid, map_tag)) then
      call send_data(num_of_send_data)%set_my_exchange(send_comp, send_grid, &
-                                                      recv_comp, recv_grid)
+                                                      recv_comp, recv_grid, map_tag)
   end if
   
 end subroutine set_send_data
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine set_recv_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, is_avr, &
+subroutine set_recv_data(send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, map_tag, is_avr, &
                          intvl, exchange_type, time_lag, num_of_layer, &
                          grid_intpl_tag, fill_value, exchange_tag)
   use jlt_utils, only : put_log
@@ -180,6 +182,7 @@ subroutine set_recv_data(send_comp, send_grid, send_data_name, recv_comp, recv_g
   implicit none
   character(len=*), intent(IN) :: send_comp, send_grid, send_data_name
   character(len=*), intent(IN) :: recv_comp, recv_grid, recv_data_name
+  integer, intent(IN)          :: map_tag
   logical, intent(IN)          :: is_avr
   integer, intent(IN)          :: intvl
   integer, intent(IN)          :: time_lag
@@ -204,9 +207,9 @@ subroutine set_recv_data(send_comp, send_grid, send_data_name, recv_comp, recv_g
                                            is_avr, intvl, exchange_type, time_lag, num_of_layer, &
                                            grid_intpl_tag, fill_value, exchange_tag)
 
-  if (is_exchange_assigned(send_comp, send_grid, recv_comp, recv_grid)) then
+  if (is_exchange_assigned(send_comp, send_grid, recv_comp, recv_grid, map_tag)) then
      call recv_data(num_of_recv_data)%set_my_exchange(send_comp, send_grid, &
-                                                      recv_comp, recv_grid)
+                                                      recv_comp, recv_grid, map_tag)
   end if
   
 end subroutine set_recv_data
@@ -348,16 +351,17 @@ end function is_my_send_data
   
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine set_my_send_exchange(data_num, send_comp, send_grid, recv_comp, recv_grid) 
+subroutine set_my_send_exchange(data_num, send_comp, send_grid, recv_comp, recv_grid, map_tag) 
   implicit none
   integer, intent(IN)          :: data_num
   character(len=*), intent(IN) :: send_comp
   character(len=*), intent(IN) :: send_grid
   character(len=*), intent(IN) :: recv_comp
   character(len=*), intent(IN) :: recv_grid
+  integer, intent(IN)          :: map_tag
   
   call send_data(data_num)%set_my_exchange(send_comp, send_grid, &
-                                           recv_comp, recv_grid)
+                                           recv_comp, recv_grid, map_tag)
 end subroutine set_my_send_exchange
    
 !=======+=========+=========+=========+=========+=========+=========+=========+
@@ -384,16 +388,17 @@ end function is_my_recv_data
   
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine set_my_recv_exchange(data_num, send_comp, send_grid, recv_comp, recv_grid) 
+subroutine set_my_recv_exchange(data_num, send_comp, send_grid, recv_comp, recv_grid, map_tag) 
   implicit none
   integer, intent(IN)          :: data_num
   character(len=*), intent(IN) :: send_comp
   character(len=*), intent(IN) :: send_grid
   character(len=*), intent(IN) :: recv_comp
   character(len=*), intent(IN) :: recv_grid
+  integer, intent(IN)          :: map_tag
   
   call recv_data(data_num)%set_my_exchange(send_comp, send_grid, &
-                                           recv_comp, recv_grid)
+                                           recv_comp, recv_grid, map_tag)
 end subroutine set_my_recv_exchange
    
 !=======+=========+=========+=========+=========+=========+=========+=========+

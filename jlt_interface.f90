@@ -26,7 +26,7 @@ module jlt_interface
   public :: jlt_def_varp                    ! subroutine ! dummy subroutine
   public :: jlt_def_varg                    ! subroutine ! dummy subroutine
   public :: jlt_end_var_def                 ! subroutnne () ! dummy subroutine
-  public :: jlt_set_data                    ! subroutine (send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, 
+  public :: jlt_set_data                    ! subroutine (send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, map_tag, 
                                             !             is_avr, intvl, time_lag, num_of_layer, &
                                             !             grid_intpl_tag, fill_value, exchange_tag)
   !public :: jlt_set_recv_data               ! subroutine (send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, 
@@ -56,6 +56,8 @@ module jlt_interface
   
   public :: jlt_write_mapping_table         ! subroutine (fid) ! dummy
   public :: jlt_read_mapping_table          ! subroutine (fid) ! dummy
+
+  !public :: jlt_get_interpolation_mode      !
   
 !--------------------------------   private  ---------------------------------!
 
@@ -451,7 +453,7 @@ subroutine jlt_set_mapping_table(my_model_name, &
                                  send_model_name, send_grid_name, recv_model_name,  recv_grid_name, &
                                  map_tag, is_recv_intpl, intpl_mode, send_grid, recv_grid, coef)
   use jlt_constant, only : NUM_OF_EXCHANGE_GRID, MAX_GRID, NO_GRID, STR_LONG
-  use jlt_constant, only : INTPL_SERIAL_FAST, INTPL_SERIAL_SAFE, INTPL_PARALLEL
+  use jlt_constant, only : INTPL_SERIAL_FAST, INTPL_SERIAL_SAFE, INTPL_PARALLEL, INTPL_USER
   use jlt_mpi_lib, only : jml_isLocalLeader, jml_BcastLocal, jml_SendLeader, jml_RecvLeader, jml_GetMyrank, &
                            jml_GetLeaderRank
   use jlt_utils, only : put_log, IntToStr, error
@@ -495,8 +497,10 @@ subroutine jlt_set_mapping_table(my_model_name, &
      intpl_mode_int = INTPL_SERIAL_SAFE
   case("PARALLEL", "parallel", "Parallel")
      intpl_mode_int = INTPL_PARALLEL
+  case("USER", "user", "User")
+     intpl_mode_int = INTPL_USER
   case default
-     call error("jlt_set_mapping_table", "intpl_mode msut be FAST or SAFE or PARALLEL")
+     call error("jlt_set_mapping_table", "intpl_mode msut be FAST or SAFE or PARALLEL or USER")
   end select
   
   call set_mapping_table(trim(my_model_name), trim(send_model_name), trim(send_grid_name), &
@@ -508,13 +512,13 @@ subroutine jlt_set_mapping_table(my_model_name, &
   
   do i = 1, get_num_of_send_data()
      if (is_my_send_data(i, send_model_name, send_grid_name, recv_model_name, recv_grid_name)) then
-        call set_my_send_exchange(i, send_model_name, send_grid_name, recv_model_name, recv_grid_name)
+        call set_my_send_exchange(i, send_model_name, send_grid_name, recv_model_name, recv_grid_name, map_tag)
      end if
   end do
   
   do i = 1, get_num_of_recv_data()
      if (is_my_recv_data(i, send_model_name, send_grid_name, recv_model_name, recv_grid_name)) then
-        call set_my_recv_exchange(i, send_model_name, send_grid_name, recv_model_name, recv_grid_name)
+        call set_my_recv_exchange(i, send_model_name, send_grid_name, recv_model_name, recv_grid_name, map_tag)
      end if
   end do
   
@@ -1171,6 +1175,7 @@ subroutine jlt_read_mapping_table(fid)
   character(len=STR_SHORT) :: send_grid_name
   character(len=STR_SHORT) :: recv_model_name
   character(len=STR_SHORT) :: recv_grid_name
+  integer                  :: map_tag
   class(exchange_class), pointer :: exchange_ptr
   integer :: i, j
   
@@ -1182,22 +1187,44 @@ subroutine jlt_read_mapping_table(fid)
      send_grid_name  = trim(exchange_ptr%get_send_grid_name())
      recv_model_name = trim(exchange_ptr%get_recv_comp_name())
      recv_grid_name  = trim(exchange_ptr%get_recv_grid_name())
-  
+     map_tag         = exchange_ptr%get_map_tag()
+     
      do j = 1, get_num_of_send_data()
         if (is_my_send_data(j, send_model_name, send_grid_name, recv_model_name, recv_grid_name)) then
-           call set_my_send_exchange(j, send_model_name, send_grid_name, recv_model_name, recv_grid_name)
+           call set_my_send_exchange(j, send_model_name, send_grid_name, recv_model_name, recv_grid_name, map_tag)
         end if
      end do
   
      do j = 1, get_num_of_recv_data()
         if (is_my_recv_data(j, send_model_name, send_grid_name, recv_model_name, recv_grid_name)) then
-           call set_my_recv_exchange(j, send_model_name, send_grid_name, recv_model_name, recv_grid_name)
+           call set_my_recv_exchange(j, send_model_name, send_grid_name, recv_model_name, recv_grid_name, map_tag)
         end if
      end do
   end do
   
 end subroutine jlt_read_mapping_table
 
+!=======+=========+=========+=========+=========+=========+=========+=========+
+
+subroutine jlt_set_user_interpolation(send_comp, send_grid, recv_comp, recv_grid, intpl_tag, user_func)
+  use jlt_exchange_class, only : exchange_class, interpolation_user_ifc
+  use jlt_exchange, only : get_exchange_ptr
+  implicit none
+  character(len=*), intent(IN) :: send_comp
+  character(len=*), intent(IN) :: send_grid
+  character(len=*), intent(IN) :: recv_comp
+  character(len=*), intent(IN) :: recv_grid
+  integer, intent(IN)          :: intpl_tag
+  procedure(interpolation_user_ifc), pointer :: user_func
+  type(exchange_class), pointer :: exchange_ptr
+
+  exchange_ptr => get_exchange_ptr(send_comp, send_grid, recv_comp, recv_grid, intpl_tag)
+
+  call exchange_ptr%set_user_interpolation(user_func)
+  
+end subroutine jlt_set_user_interpolation
+
+  
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
 end module jlt_interface

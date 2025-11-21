@@ -89,5 +89,6 @@ module jlt_constant
   integer,parameter,public :: INTPL_SERIAL_FAST = 1    ! serial and domain dependent mode
   integer,parameter,public :: INTPL_SERIAL_SAFE = 2    ! serian and domain independent mode (default)
   integer,parameter,public :: INTPL_PARALLEL    = 3    ! thread parallel mode
+  integer,parameter,public :: INTPL_USER        = 4    ! user defined interpolation
   
 end module jlt_constant

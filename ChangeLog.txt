@@ -546,6 +546,48 @@ Routines
 Detail
  pointerで宣言していた動的配列をallocatableに変更。
 
+-----------------------------------------------------------------
+
+Version:0.040000
+Date:2025/11/21
+
+Files: jlt_exchange_class.f90, jlt_exchange.f90, jlt_data_class.f90, jlt_data.f90
+
+Routines
+
+ get_map_tag                  : [add]
+ is_my_exchange               : [mod]
+ is_exchange_assigned         : [mod]
+ get_exchange_ptr_name        : [mod]
+ set_my_exchange              : [mod]
+ set_data                     : [mod]
+ set_send_data                : [mod]
+ set_recv_data                : [mod]
+ set_my_send_exchange         : [mod]
+ set_my_recv_exchange         : [mod]
+ 
+Detail
+ exchange_classの検索にモデル名、格子名だけでなくmap_tagを追加。API jlt_set_dataにmap_tagが追加される。
+
+-----------------------------------------------------------------
+
+Version:0.050000
+Date:2025/11/21
+
+Files: jlt_constant.f90 jlt_exchange_class.f90, jlt_interface.f90
+
+Routines
+
+ INTPL_USER                   : [add]
+ set_user_interpolation       : [add]
+ inteterpolate_data           : [mod]
+ jlt_set_mapping_table        : [mod]
+ jlt_set_user_interpolation   : [add] 
+
+ 
+Detail
+ 補間計算サブルーチンを利用者が定義できるようにした。
+
 
  
  
