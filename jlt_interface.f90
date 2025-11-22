@@ -34,7 +34,8 @@ module jlt_interface
   !                                          !             grid_intpl_tag, fill_value, exchange_tag)
   public :: jlt_set_fill_value              ! subroutine (fill_value)  ! dummy 
   public :: jlt_get_fill_value              ! real(kind=8) function () ! dummy
-  public :: jlt_set_mapping_table           ! subroutine (my_name, send_com, send_grid, recv_comp, recv_grid, map_tag, send_index, recv_index, coef)
+  public :: jlt_set_mapping_table           ! subroutine (my_name, send_com, send_grid, recv_comp, recv_grid, map_tag,
+                                            !             is_recv_intpl, intpl_mode, send_index, recv_index, coef)
   public :: jlt_init_time                   ! subroutine (time_array)
   public :: jlt_set_time                    ! subroutine (current_time, delta_t)
   public :: jlt_put_data                    ! subroutine (data_name, data)
@@ -57,7 +58,7 @@ module jlt_interface
   public :: jlt_write_mapping_table         ! subroutine (fid) ! dummy
   public :: jlt_read_mapping_table          ! subroutine (fid) ! dummy
 
-  !public :: jlt_get_interpolation_mode      !
+  public :: jlt_set_user_interpolation      ! subroutine (send_comp, send_grid, recv_comp, recv_grid, map_tag, user_func)
   
 !--------------------------------   private  ---------------------------------!
 
@@ -467,7 +468,7 @@ subroutine jlt_set_mapping_table(my_model_name, &
   character(len=*), intent(IN)  :: recv_model_name, recv_grid_name
   integer, intent(IN)           :: map_tag
   logical, intent(IN)           :: is_recv_intpl
-  character(len=*), intent(IN)  :: intpl_mode ! "FAST", "SAFE", "PARALLEL"
+  character(len=*), intent(IN)  :: intpl_mode ! "FAST", "SAFE", "PARALLEL", "USER"
   integer, intent(IN)           :: send_grid(:), recv_grid(:)
   real(kind=8), intent(IN)      :: coef(:)
   logical :: is_my_intpl
@@ -1206,7 +1207,7 @@ end subroutine jlt_read_mapping_table
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine jlt_set_user_interpolation(send_comp, send_grid, recv_comp, recv_grid, intpl_tag, user_func)
+subroutine jlt_set_user_interpolation(send_comp, send_grid, recv_comp, recv_grid, map_tag, user_func)
   use jlt_exchange_class, only : exchange_class, interpolation_user_ifc
   use jlt_exchange, only : get_exchange_ptr
   implicit none
@@ -1214,11 +1215,11 @@ subroutine jlt_set_user_interpolation(send_comp, send_grid, recv_comp, recv_grid
   character(len=*), intent(IN) :: send_grid
   character(len=*), intent(IN) :: recv_comp
   character(len=*), intent(IN) :: recv_grid
-  integer, intent(IN)          :: intpl_tag
-  procedure(interpolation_user_ifc), pointer :: user_func
+  integer, intent(IN)          :: map_tag
+  procedure(interpolation_user_ifc), pointer, intent(IN) :: user_func
   type(exchange_class), pointer :: exchange_ptr
 
-  exchange_ptr => get_exchange_ptr(send_comp, send_grid, recv_comp, recv_grid, intpl_tag)
+  exchange_ptr => get_exchange_ptr(send_comp, send_grid, recv_comp, recv_grid, map_tag)
 
   call exchange_ptr%set_user_interpolation(user_func)
   

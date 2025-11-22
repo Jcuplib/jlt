@@ -588,6 +588,20 @@ Routines
 Detail
  補間計算サブルーチンを利用者が定義できるようにした。
 
+-----------------------------------------------------------------
+
+Version:0.050001
+Date:2025/11/22
+
+Files: jlt_interface.f90
+
+Routines
+
+ jlt_set_user_interpolation   : [mod]
+ 
+Detail
+ 関数ポインタの引数にintent(IN)属性を追加。
+
 
  
  

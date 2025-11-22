@@ -117,16 +117,15 @@ module jlt_exchange_class
 
   abstract interface
     subroutine interpolation_user_ifc(send_data, recv_data, send_index, recv_index, coef, &
-                                   num_of_layer, num_of_conv, map_tag)
-      real(kind=8), intent(IN)    :: send_data(:,:)
-      real(kind=8), intent(INOUT) :: recv_data(:,:)
-      integer, intent(IN)         :: send_index(:)
-      integer, intent(IN)         :: recv_index(:)
-      real(kind=8), intent(IN)    :: coef(:)
-      integer, intent(IN)         :: num_of_layer
-      integer, intent(IN)         :: num_of_conv
-      integer, intent(IN)         :: map_tag
-      !real(kind=8), intent(IN)    :: missing_value
+                                      num_of_layer, num_of_conv, intpl_tag)
+      real(kind=8), intent(IN)     :: send_data(:,:)
+      real(kind=8), intent(INOUT)  :: recv_data(:,:)
+      integer, intent(IN)          :: send_index(:)
+      integer, intent(IN)          :: recv_index(:)
+      real(kind=8), intent(IN)     :: coef(:)
+      integer, intent(IN)          :: num_of_layer
+      integer, intent(IN)          :: num_of_conv
+      integer, intent(IN)          :: intpl_tag
     end subroutine
   end interface
 
@@ -1211,6 +1210,7 @@ subroutine set_user_interpolation(self, user_func)
   class(exchange_class), intent(INOUT) :: self
   procedure(interpolation_user_ifc), pointer, intent(IN) :: user_func
 
+  
   self%user_interpolation => user_func
 
 end subroutine set_user_interpolation
@@ -1292,7 +1292,7 @@ end subroutine target_2_exchange_buffer
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine send_data_1d(self, data, exchange_buffer, map_tag, exchange_tag)
+subroutine send_data_1d(self, data, exchange_buffer, intpl_tag, exchange_tag)
   use jlt_constant, only : STR_MID
   use jlt_utils, only    : put_log, get_log_level, DETAIL_LOG
   use jlt_mpi_lib, only : jml_IsendModel2, jml_send_waitall
@@ -1300,7 +1300,7 @@ subroutine send_data_1d(self, data, exchange_buffer, map_tag, exchange_tag)
   class(exchange_class)       :: self
   real(kind=8), intent(IN)    :: data(:)
   real(kind=8), allocatable, target :: exchange_buffer(:,:)
-  integer, intent(IN)         :: map_tag
+  integer, intent(IN)         :: intpl_tag
   integer, intent(IN)         :: exchange_tag
   real(kind=8), pointer       :: send_data(:,:)
   real(kind=8), pointer       :: intpl_data(:,:)
@@ -1317,7 +1317,7 @@ subroutine send_data_1d(self, data, exchange_buffer, map_tag, exchange_tag)
 
   if (self%is_my_intpl()) then
        call self%interpolate_data(reshape(data,[size(data), 1]), &
-                                  exchange_buffer, 1, map_tag)
+                                  exchange_buffer, 1, intpl_tag)
   else
     do i = 1, self%ex_map%exchange_data_size
       exchange_buffer(i,1) = data(i)
@@ -1353,7 +1353,7 @@ end subroutine send_data_1d
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine send_data_2d(self, data, exchange_buffer, num_of_layer, map_tag, exchange_tag)
+subroutine send_data_2d(self, data, exchange_buffer, num_of_layer, intpl_tag, exchange_tag)
   use jlt_constant, only : STR_MID
   use jlt_utils, only    : put_log, get_log_level, DETAIL_LOG
   use jlt_mpi_lib, only : jml_IsendModel3, jml_send_waitall
@@ -1362,7 +1362,7 @@ subroutine send_data_2d(self, data, exchange_buffer, num_of_layer, map_tag, exch
   real(kind=8), intent(IN)    :: data(:,:)
   type(buffer_class), intent(INOUT) :: exchange_buffer(:)
   integer, intent(IN)         :: num_of_layer
-  integer, intent(IN)         :: map_tag
+  integer, intent(IN)         :: intpl_tag
   integer, intent(IN)         :: exchange_tag
   real(kind=8), pointer       :: send_data(:,:)
   real(kind=8), pointer       :: intpl_data(:,:)
@@ -1399,7 +1399,7 @@ subroutine send_data_2d(self, data, exchange_buffer, num_of_layer, map_tag, exch
   
     do k = 1, num_of_layer
        if (self%is_my_intpl()) then
-             call self%interpolate_data(data, intpl_buffer, num_of_layer, map_tag)
+             call self%interpolate_data(data, intpl_buffer, num_of_layer, intpl_tag)
           !write(0, *) "send_data_2d, send interpolation ", intpl_buffer
        else
           !write(0, *) "send_data_2d, recv interpolation"
@@ -1443,7 +1443,7 @@ end subroutine send_data_2d
 
 !=======+=========+=========+=========+=========+=========+=========+=========+
 
-subroutine send_data_2d_org(self, data, exchange_buffer, num_of_layer, map_tag, exchange_tag)
+subroutine send_data_2d_org(self, data, exchange_buffer, num_of_layer, intpl_tag, exchange_tag)
   use jlt_constant, only : STR_MID
   use jlt_utils, only    : put_log, get_log_level, DETAIL_LOG
   use jlt_mpi_lib, only : jml_IsendModel3, jml_send_waitall
@@ -1452,7 +1452,7 @@ subroutine send_data_2d_org(self, data, exchange_buffer, num_of_layer, map_tag, 
   real(kind=8), intent(IN)    :: data(:,:)
   real(kind=8), pointer       :: exchange_buffer(:,:)
   integer, intent(IN)         :: num_of_layer
-  integer, intent(IN)         :: map_tag
+  integer, intent(IN)         :: intpl_tag
   integer, intent(IN)         :: exchange_tag
   real(kind=8), pointer       :: send_data(:,:)
   real(kind=8), pointer       :: intpl_data(:,:)
@@ -1951,11 +1951,11 @@ end subroutine read_exchange_class
 subroutine interpolate_data(self, send_data, recv_data, num_of_layer, intpl_tag, missing_value)
   use jlt_utils, only : error
   implicit none
-  class(exchange_class)       :: self
-  real(kind=8), intent(IN)    :: send_data(:,:)
-  real(kind=8), intent(INOUT) :: recv_data(:,:)
-  integer, intent(IN)         :: num_of_layer
-  integer, intent(IN)         :: intpl_tag
+  class(exchange_class)        :: self
+  real(kind=8), intent(IN)     :: send_data(:,:)
+  real(kind=8), intent(INOUT)  :: recv_data(:,:)
+  integer, intent(IN)          :: num_of_layer
+  integer, intent(IN)          :: intpl_tag
   real(kind=8), optional, intent(IN) :: missing_value
   
   select case(self%intpl_mode)
