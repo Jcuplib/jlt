@@ -1,0 +1,6 @@
+  cd test/run
+  make               # build
+  make SYSTEM=wink-intel   # for Intel compiler 
+  make clean         # test clean 
+  make distclean     # all clean
+  sh run.sh          # run test
