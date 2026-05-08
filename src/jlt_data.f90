@@ -13,7 +13,7 @@ module jlt_data
 public :: init_data                         ! subroutine (my_comp_name) 
 
 public :: set_data                          ! subroutine (send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, 
-                                            !             is_avr, intvl, time_lag, num_of_layer, &
+                                            !             map_tag, is_avr, intvl, time_lag, num_of_layer, &
                                             !             grid_intpl_tag, fill_value, exchange_tag)
 !public :: set_send_data                     ! subroutine (send_comp, send_grid, send_data_name, recv_comp, recv_grid, recv_data_name, 
 !                                            !             is_avr, intvl, num_of_layer, &
